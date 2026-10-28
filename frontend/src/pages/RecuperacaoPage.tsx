@@ -24,7 +24,7 @@ type Payload = {
 };
 
 const COLS: {
-  id: "31_60" | "61_90" | "90_mais";
+  id: "60_90" | "90_180" | "180_mais";
   label: string;
   hint: string;
   tone: string;
@@ -32,25 +32,25 @@ const COLS: {
   num: string;
 }[] = [
   {
-    id: "31_60",
-    label: "31 – 60 dias",
-    hint: "Já comprou e parou há 31 a 60 dias. Entram os 10 de maior faturamento.",
+    id: "60_90",
+    label: "60 – 90 dias",
+    hint: "Já comprou e parou há 60 a 90 dias. Entram os 10 de maior faturamento.",
     tone: "from-amber-50 to-white border-amber-100",
     badge: "bg-amber-100 text-amber-700",
     num: "text-amber-500",
   },
   {
-    id: "61_90",
-    label: "61 – 89 dias",
-    hint: "Última compra entre 61 e 89 dias. Os 10 melhores dessa faixa.",
+    id: "90_180",
+    label: "90 – 180 dias",
+    hint: "Última compra entre 91 e 179 dias. Os 10 melhores dessa faixa.",
     tone: "from-orange-50 to-white border-orange-100",
     badge: "bg-orange-100 text-orange-700",
     num: "text-orange-500",
   },
   {
-    id: "90_mais",
-    label: "90+ dias",
-    hint: "Sem compra há 90 dias ou mais. Os 10 de maior histórico.",
+    id: "180_mais",
+    label: "180+ dias",
+    hint: "Sem compra há 180 dias ou mais. Os 10 de maior histórico.",
     tone: "from-rose-50 to-white border-rose-100",
     badge: "bg-rose-100 text-rose-600",
     num: "text-rose-500",
@@ -101,10 +101,10 @@ export function RecuperacaoPage() {
         const demo = closes[c.id];
         return demo ? { ...c, close_kind: demo.kind } : c;
       });
-      const niveis: Record<"31_60" | "61_90" | "90_mais", number> = { "31_60": 0, "61_90": 0, "90_mais": 0 };
+      const niveis: Record<"60_90" | "90_180" | "180_mais", number> = { "60_90": 0, "90_180": 0, "180_mais": 0 };
       for (const c of filtered) {
         const nivel = c.nivel;
-        if (nivel === "31_60" || nivel === "61_90" || nivel === "90_mais") niveis[nivel] += 1;
+        if (nivel === "60_90" || nivel === "90_180" || nivel === "180_mais") niveis[nivel] += 1;
       }
       setData({
         total: filtered.length,
@@ -178,9 +178,9 @@ export function RecuperacaoPage() {
   };
 
   const grouped = useMemo(() => {
-    const g: Record<string, Client[]> = { "31_60": [], "61_90": [], "90_mais": [] };
+    const g: Record<string, Client[]> = { "60_90": [], "90_180": [], "180_mais": [] };
     for (const c of data?.items || []) {
-      g[c.nivel || "90_mais"]?.push(c);
+      g[c.nivel || "180_mais"]?.push(c);
     }
     for (const k of Object.keys(g)) {
       g[k].sort((a, b) => (b.fat_12m || b.fat_total || 0) - (a.fat_12m || a.fat_total || 0));
@@ -207,7 +207,7 @@ export function RecuperacaoPage() {
         <h3 className="font-display text-lg font-extrabold text-slate-900">Como a fila é montada</h3>
         <p className="mb-4 text-sm text-slate-400">
           {role === "colaborador"
-            ? "Fora da sua carteira. Já compraram na empresa, pararam há mais de 30 dias e caíram na sua parte da fila — cada um na coluna do tempo parado."
+            ? "Fora da sua carteira. Já compraram na empresa, pararam há 60 dias ou mais e caíram na sua parte da fila — cada um na coluna do tempo parado."
             : "Rota de hoje, fora da carteira do Televendas. Só quem já comprou. 10 melhores em cada coluna, divididos entre as três."}
         </p>
         <div className="grid gap-3 md:grid-cols-3">

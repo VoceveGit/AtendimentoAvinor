@@ -47,7 +47,7 @@ export type Client = {
   critico?: boolean;
   extra_hoje?: boolean;
   agendado_hoje?: boolean;
-  nivel?: "15_30" | "31_60" | "61_90" | "90_mais";
+  nivel?: "60_90" | "90_180" | "180_mais";
   vendedor_id?: number | null;
   vendedor_nome?: string;
   cpf?: string;

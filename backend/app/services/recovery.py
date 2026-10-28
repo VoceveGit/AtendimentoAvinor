@@ -19,19 +19,19 @@ from app.services.routes_sheet import routes_for_day
 from app.services.televendas import TEAM, TELEVENDAS_IDS, public_team, scoped_seller_ids
 
 PER_STAGE = 10
-STAGE_ORDER = ("31_60", "61_90", "90_mais")
+STAGE_ORDER = ("60_90", "90_180", "180_mais")
 MAX_POOL = PER_STAGE * len(STAGE_ORDER)
 
 
 def stage_of(days: int | None) -> str | None:
-    """31–60, 61–89 e 90+. Quem nunca comprou ou comprou há ≤30 dias fica de fora."""
-    if days is None or days <= 30:
+    """60–90, 90–180 e 180+. Antes de 60 dias ainda não é recuperação."""
+    if days is None or days < 60:
         return None
-    if days <= 60:
-        return "31_60"
-    if days <= 89:
-        return "61_90"
-    return "90_mais"
+    if days <= 90:
+        return "60_90"
+    if days < 180:
+        return "90_180"
+    return "180_mais"
 
 
 def already_bought(metrics: dict | None) -> bool:
@@ -75,8 +75,11 @@ def pick_recovery_items(candidates: list[dict], team_ids: list[int]) -> list[dic
 
 
 def _stale_assignments(existing: list[RecoveryAssignment]) -> bool:
-    """Fila antiga enchia 31–60 até 30. A nova reserva no máximo 10 por coluna."""
+    """Remonta a fila do dia se ainda estiver nas faixas antigas (31–60 etc.)."""
     if len(existing) > MAX_POOL:
+        return True
+    known = set(STAGE_ORDER)
+    if any(a.faixa not in known for a in existing):
         return True
     counts = Counter(a.faixa for a in existing)
     return any(counts[k] > PER_STAGE for k in STAGE_ORDER)
@@ -188,7 +191,7 @@ async def clients_recovery(
         "page_size": page_size,
         "pool": len(mine),
         "niveis": niveis,
-        "precisam_contato": niveis.get("90_mais", 0),
+        "precisam_contato": niveis.get("180_mais", 0),
         "colaboradoras": public_team(),
         "items": sliced,
     }

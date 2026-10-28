@@ -492,9 +492,9 @@ export function RelatoriosPage() {
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-orange-200/70">Recuperação</p>
           <p className="mt-2 font-display text-6xl font-black">{k.recuperados}</p>
           <p className="text-sm font-bold text-orange-100/80">clientes voltaram a comprar</p>
-          <DotRow label="Parados há 31–60 dias" n={faixa["31_60"] || 0} color="bg-emerald-400" />
-          <DotRow label="Parados há 61–89 dias" n={faixa["61_90"] || 0} color="bg-amber-400" />
-          <DotRow label="Parados há 90+ dias" n={faixa["90_mais"] || 0} color="bg-orange-500" />
+          <DotRow label="Parados há 60–90 dias" n={faixa["60_90"] || 0} color="bg-emerald-400" />
+          <DotRow label="Parados há 90–180 dias" n={faixa["90_180"] || 0} color="bg-amber-400" />
+          <DotRow label="Parados há 180+ dias" n={faixa["180_mais"] || 0} color="bg-orange-500" />
           <p className="mt-5 text-[11px] font-bold text-orange-200/50">Quanto mais tempo parado, mais difícil trazer de volta.</p>
         </section>
       </div>

@@ -22,21 +22,19 @@ _agg_lock = asyncio.Lock()
 _base_lock = asyncio.Lock()
 CACHE_TTL = timedelta(minutes=20)
 RECOVERY_DAYS = 90
-RECOVERY_MIN_DAYS = 15
-HOT_RECOVERY_DAYS = 120
-RECOVERY_BANDS = ("15_30", "31_60", "61_90", "90_mais")
+RECOVERY_MIN_DAYS = 60
+HOT_RECOVERY_DAYS = 180
+RECOVERY_BANDS = ("60_90", "90_180", "180_mais")
 
 
 def recovery_band(days: int | None) -> str | None:
     if days is None or days < RECOVERY_MIN_DAYS:
         return None
-    if days <= 30:
-        return "15_30"
-    if days <= 60:
-        return "31_60"
     if days <= 90:
-        return "61_90"
-    return "90_mais"
+        return "60_90"
+    if days < 180:
+        return "90_180"
+    return "180_mais"
 
 
 def _parse_date(value: Any) -> date | None:
@@ -609,7 +607,7 @@ async def dashboard(
         **built,
         "colaboradoras": public_team(),
         "por_colaboradora": por,
-        "recovery_high_value": (recovery.get("niveis") or {}).get("90_mais", 0),
+        "recovery_high_value": (recovery.get("niveis") or {}).get("180_mais", 0),
     }
 
 
