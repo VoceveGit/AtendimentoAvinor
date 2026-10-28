@@ -97,6 +97,9 @@ async def load_aggregates(force: bool = False) -> dict[int, dict]:
               MAX(CASE WHEN valor_total_faturado > 0 THEN `data` END) AS ultima_compra,
               SUM(CASE
                     WHEN valor_total_faturado > 0
+                    THEN valor_total_faturado ELSE 0 END) AS fat_total,
+              SUM(CASE
+                    WHEN valor_total_faturado > 0
                      AND `data` >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
                     THEN valor_total_faturado ELSE 0 END) AS fat_12m,
               COUNT(DISTINCT CASE
@@ -137,6 +140,7 @@ async def load_aggregates(force: bool = False) -> dict[int, dict]:
                 continue
             last = _parse_date(row.get("ultima_compra"))
             fat = as_float(row.get("fat_12m"))
+            fat_total = as_float(row.get("fat_total"))
             days_since = (date.today() - last).days if last else None
             if days_since is not None and days_since < 0:
                 days_since = 0
@@ -145,6 +149,7 @@ async def load_aggregates(force: bool = False) -> dict[int, dict]:
                 "ultima_compra": last.isoformat() if last else None,
                 "dias_sem_contato": days_since,
                 "fat_12m": round(fat, 2),
+                "fat_total": round(fat_total, 2),
                 "n_compras": as_int(row.get("n_compras")) or 0,
                 "streak": _streak(unique_days, last),
             }

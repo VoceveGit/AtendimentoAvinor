@@ -67,6 +67,11 @@ export function RecoveryHint({ client, side = "right", onClose }: Props) {
       )}
       <p className="mt-4 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Última compra</p>
       <p className="mt-0.5 text-sm font-extrabold text-slate-700">{formatDate(client.ultima_compra)}</p>
+      <p className="mt-3 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Faturamento</p>
+      <p className="mt-0.5 text-sm font-extrabold text-slate-700">
+        {formatMoney(client.fat_12m || 0)}
+        <span className="ml-1 text-[11px] font-bold text-slate-400">em 12 meses</span>
+      </p>
       <p className="mt-4 flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-400">
         <ShoppingBag className="h-3 w-3" />
         Mais compra

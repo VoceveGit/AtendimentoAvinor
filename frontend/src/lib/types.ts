@@ -25,6 +25,7 @@ export type Client = {
   ultima_compra?: string | null;
   dias_sem_contato?: number | null;
   fat_12m?: number;
+  fat_total?: number;
   n_compras?: number;
   ticket_medio?: number;
   fat_medio_mes?: number;

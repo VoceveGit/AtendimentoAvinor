@@ -11,7 +11,7 @@ import { useAuth } from "../lib/auth";
 import { useDemo } from "../lib/demo";
 import { MOCK_RECOVERY } from "../lib/mockData";
 import type { Client, Colaboradora } from "../lib/types";
-import { cn, formatPhone } from "../lib/utils";
+import { cn, formatMoney, formatPhone } from "../lib/utils";
 
 const GIRL_BY_ID: Record<number, string> = { 1071: "Poliana", 1072: "Fernanda", 1073: "Karolline" };
 
@@ -34,15 +34,15 @@ const COLS: {
   {
     id: "31_60",
     label: "31 – 60 dias",
-    hint: "Alerta inicial. Pega até 10. Se faltar, usa o próximo nível.",
+    hint: "Já comprou e parou há 31 a 60 dias. Entram os 10 de maior faturamento.",
     tone: "from-amber-50 to-white border-amber-100",
     badge: "bg-amber-100 text-amber-700",
     num: "text-amber-500",
   },
   {
     id: "61_90",
-    label: "61 – 90 dias",
-    hint: "Risco médio. Pega até 10. Se faltar, usa o próximo nível.",
+    label: "61 – 89 dias",
+    hint: "Última compra entre 61 e 89 dias. Os 10 melhores dessa faixa.",
     tone: "from-orange-50 to-white border-orange-100",
     badge: "bg-orange-100 text-orange-700",
     num: "text-orange-500",
@@ -50,7 +50,7 @@ const COLS: {
   {
     id: "90_mais",
     label: "90+ dias",
-    hint: "Crítico. Pega até 10. Completa o teto de 30 da janela.",
+    hint: "Sem compra há 90 dias ou mais. Os 10 de maior histórico.",
     tone: "from-rose-50 to-white border-rose-100",
     badge: "bg-rose-100 text-rose-600",
     num: "text-rose-500",
@@ -183,7 +183,7 @@ export function RecuperacaoPage() {
       g[c.nivel || "90_mais"]?.push(c);
     }
     for (const k of Object.keys(g)) {
-      g[k].sort((a, b) => (a.dias_sem_contato || 0) - (b.dias_sem_contato || 0));
+      g[k].sort((a, b) => (b.fat_12m || b.fat_total || 0) - (a.fat_12m || a.fat_total || 0));
     }
     return g;
   }, [data]);
@@ -196,8 +196,8 @@ export function RecuperacaoPage() {
         <CollaboratorFilter value={vendedor} onChange={setVendedor} team={data?.colaboradoras} busy={loading} />
         <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-extrabold text-rose-600 ring-1 ring-rose-100">
           {role === "colaborador"
-            ? `Sua fila · ${data?.pool || 0} cliente(s) · menor tempo parado primeiro`
-            : `Prioridade: menor tempo parado primeiro · ${data?.pool || 0} na fila`}
+            ? `Sua fila · ${data?.pool || 0} cliente(s) · maior faturamento primeiro`
+            : `Melhores clientes de cada faixa · ${data?.pool || 0} na fila`}
         </span>
       </div>
 
@@ -207,8 +207,8 @@ export function RecuperacaoPage() {
         <h3 className="font-display text-lg font-extrabold text-slate-900">Como a fila é montada</h3>
         <p className="mb-4 text-sm text-slate-400">
           {role === "colaborador"
-            ? "Os 30 da janela são divididos entre as três. Aqui só entram os seus — cada um cai na coluna do tempo parado."
-            : "Extra da rota de hoje. Não é a carteira. Teto 30, ~10 para cada uma, começando pelos 31–60."}
+            ? "Fora da sua carteira. Já compraram na empresa, pararam há mais de 30 dias e caíram na sua parte da fila — cada um na coluna do tempo parado."
+            : "Rota de hoje, fora da carteira do Televendas. Só quem já comprou. 10 melhores em cada coluna, divididos entre as três."}
         </p>
         <div className="grid gap-3 md:grid-cols-3">
           {COLS.map((col, i) => (
@@ -277,6 +277,9 @@ export function RecuperacaoPage() {
                       <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                         <Phone className="h-3 w-3" />
                         {formatPhone(c.telefone)}
+                      </p>
+                      <p className="mt-1 text-[11px] font-extrabold text-slate-400">
+                        {formatMoney(c.fat_12m || c.fat_total || 0)}
                       </p>
                     </div>
                     <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black", col.badge)}>

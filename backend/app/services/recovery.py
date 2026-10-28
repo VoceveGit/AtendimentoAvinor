@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 
 from sqlalchemy import select
@@ -17,18 +18,68 @@ from app.services.clients import (
 from app.services.routes_sheet import routes_for_day
 from app.services.televendas import TEAM, TELEVENDAS_IDS, public_team, scoped_seller_ids
 
-MAX_POOL = 30
+PER_STAGE = 10
 STAGE_ORDER = ("31_60", "61_90", "90_mais")
+MAX_POOL = PER_STAGE * len(STAGE_ORDER)
 
 
 def stage_of(days: int | None) -> str | None:
+    """31–60, 61–89 e 90+. Quem nunca comprou ou comprou há ≤30 dias fica de fora."""
     if days is None or days <= 30:
         return None
     if days <= 60:
         return "31_60"
-    if days <= 90:
+    if days <= 89:
         return "61_90"
     return "90_mais"
+
+
+def already_bought(metrics: dict | None) -> bool:
+    if not metrics:
+        return False
+    if not metrics.get("ultima_compra"):
+        return False
+    return (metrics.get("n_compras") or 0) > 0
+
+
+def recovery_score(item: dict) -> tuple:
+    """Melhor cliente primeiro: 12 meses, histórico e frequência."""
+    return (
+        -(item.get("fat_12m") or 0),
+        -(item.get("fat_total") or 0),
+        -(item.get("n_compras") or 0),
+    )
+
+
+def pick_recovery_items(candidates: list[dict], team_ids: list[int]) -> list[dict]:
+    buckets: dict[str, list[dict]] = {k: [] for k in STAGE_ORDER}
+    for item in candidates:
+        stage = stage_of(item.get("dias_sem_contato"))
+        if not stage or not already_bought(item):
+            continue
+        buckets[stage].append({**item, "nivel": stage})
+
+    for key in STAGE_ORDER:
+        buckets[key].sort(key=recovery_score)
+
+    if not team_ids:
+        team_ids = [0]
+
+    picked: list[dict] = []
+    n = 0
+    for key in STAGE_ORDER:
+        for item in buckets[key][:PER_STAGE]:
+            picked.append({**item, "assigned_vendedor_id": team_ids[n % len(team_ids)]})
+            n += 1
+    return picked
+
+
+def _stale_assignments(existing: list[RecoveryAssignment]) -> bool:
+    """Fila antiga enchia 31–60 até 30. A nova reserva no máximo 10 por coluna."""
+    if len(existing) > MAX_POOL:
+        return True
+    counts = Counter(a.faixa for a in existing)
+    return any(counts[k] > PER_STAGE for k in STAGE_ORDER)
 
 
 async def ensure_assignments(session: AsyncSession, day: date | None = None) -> list[RecoveryAssignment]:
@@ -36,42 +87,34 @@ async def ensure_assignments(session: AsyncSession, day: date | None = None) -> 
     existing = (
         await session.execute(select(RecoveryAssignment).where(RecoveryAssignment.dia == day))
     ).scalars().all()
-    if existing:
+    if existing and not _stale_assignments(list(existing)):
         return list(existing)
 
     clients, agg = await load_all_clients(), await load_aggregates()
     route_ids = {r["id"] for r in routes_for_day(day)}
-    buckets: dict[str, list[dict]] = {k: [] for k in STAGE_ORDER}
-
+    candidates: list[dict] = []
     for c in clients:
         cid = c.get("id")
         if not cid or c.get("rota_id") not in route_ids:
             continue
-        metrics = agg.get(cid) or {}
         if c.get("vendedor_id") in TELEVENDAS_IDS:
             continue
-        stage = stage_of(metrics.get("dias_sem_contato"))
-        if not stage:
-            continue
-        buckets[stage].append({**c, **metrics, "nivel": stage})
-
-    for key in STAGE_ORDER:
-        buckets[key].sort(key=lambda x: (x.get("dias_sem_contato") or 9999, -(x.get("fat_12m") or 0)))
-
-    pool: list[dict] = []
-    for key in STAGE_ORDER:
-        need = MAX_POOL - len(pool)
-        if need <= 0:
-            break
-        pool.extend(buckets[key][:need])
+        metrics = agg.get(cid) or {}
+        candidates.append({**c, **metrics})
 
     team_ids = [c.vendedor_id for c in TEAM]
+    picked = pick_recovery_items(candidates, team_ids)
+
+    for row in existing:
+        await session.delete(row)
+    await session.flush()
+
     rows: list[RecoveryAssignment] = []
-    for i, item in enumerate(pool):
+    for item in picked:
         row = RecoveryAssignment(
             cliente_id=int(item["id"]),
             dia=day,
-            vendedor_id=team_ids[i % len(team_ids)],
+            vendedor_id=int(item["assigned_vendedor_id"]),
             faixa=item["nivel"],
         )
         session.add(row)
@@ -118,8 +161,7 @@ async def clients_recovery(
             continue
         days = metrics.get("dias_sem_contato")
         live = stage_of(days)
-        if not live:
-            # Comprou de novo — não é recuperação.
+        if not live or not already_bought(metrics):
             continue
         item = _hydrate(base, metrics, status_by_id, by_cs.get(asg.cliente_id), apply_default=True)
         item["nivel"] = live
@@ -132,7 +174,7 @@ async def clients_recovery(
             continue
         items.append(item)
 
-    items.sort(key=lambda c: (c.get("dias_sem_contato") or 0, c.get("nome") or ""))
+    items.sort(key=lambda c: (*recovery_score(c), c.get("nome") or ""))
     total = len(items)
     start = max(page - 1, 0) * page_size
     sliced = items[start : start + page_size]

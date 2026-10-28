@@ -42,7 +42,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/clientes-do-dia": { title: "Clientes do Dia", subtitle: "Atendimentos da rota de hoje — alinhados a Enviar cards" },
   "/clientes-recuperacao": {
     title: "Em Recuperação",
-    subtitle: "Fila do dia · teto 30 · menor tempo parado primeiro",
+    subtitle: "Fila do dia · teto 30 · melhores clientes de cada faixa",
   },
   "/finalizados": {
     title: "Finalizados",
