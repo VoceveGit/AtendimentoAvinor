@@ -7,7 +7,6 @@ import {
   LogOut,
   MapPinned,
   PieChart,
-  ScrollText,
   Settings2,
   Shield,
   Siren,
@@ -33,7 +32,6 @@ const ADMIN = [
   { to: "/config-status", label: "Configurar Status", icon: Settings2 },
   { to: "/config-banco", label: "Conexão de Banco", icon: Database },
   { to: "/importar-planilha", label: "Importar Planilha", icon: FileSpreadsheet },
-  { to: "/script-cursor", label: "Script Cursor", icon: ScrollText },
 ];
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
@@ -64,7 +62,6 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     title: "Importar Planilha de Rotas",
     subtitle: "Faça upload do .xlsx e mapeie as colunas automaticamente",
   },
-  "/script-cursor": { title: "Script Cursor", subtitle: "Prompt completo para replicar este painel" },
 };
 
 export function AppShell() {

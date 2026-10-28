@@ -323,7 +323,7 @@ export function RelatoriosPage() {
           </div>
           <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-extrabold text-orange-700">
             <span className="h-2 w-2 rounded-full bg-orange-400" />
-            {k.nao_atendidos_hoje} em andamento agora
+            {k.nao_atendidos_hoje} {k.nao_atendidos_hoje === 1 ? "marcado" : "marcados"} para falar hoje
           </span>
           <div className="mt-5 flex h-8 overflow-hidden rounded-full">
             <div className="bg-emerald-500" style={{ width: `${(vendas / Math.max(enc, 1)) * 100}%` }} title={`${vendas} vendas`} />

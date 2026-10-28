@@ -1,6 +1,7 @@
 import { ChevronDown, PackageSearch, RefreshCw, Search } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Busy } from "../components/Busy";
 import { CollaboratorFilter } from "../components/CollaboratorFilter";
 import { PedidoPopup, type PedidoView } from "../components/PedidoPopup";
 import { api } from "../lib/api";
@@ -57,14 +58,25 @@ export function FinalizadosPage() {
   const [q, setQ] = useState("");
   const [asking, setAsking] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
+  const [loading, setLoading] = useState(!mock);
+  const seq = useRef(0);
 
   const load = () => {
     if (mock) return;
+    const my = ++seq.current;
+    setLoading(true);
     const params = new URLSearchParams({ dia, kind: "finalizado" });
     if (vendedor !== "todas") params.set("vendedor", vendedor);
     api<{ items: Finalizado[] }>(`/api/finalized?${params}`)
-      .then((r) => setItems(r.items || []))
-      .catch((e: Error) => toast.error(e.message));
+      .then((r) => {
+        if (my === seq.current) setItems(r.items || []);
+      })
+      .catch((e: Error) => {
+        if (my === seq.current) toast.error(e.message);
+      })
+      .finally(() => {
+        if (my === seq.current) setLoading(false);
+      });
     api<{ colaboradoras?: Colaboradora[] }>("/api/clients/today?page_size=1")
       .then((r) => setTeam(r.colaboradoras || []))
       .catch(() => undefined);
@@ -100,9 +112,9 @@ export function FinalizadosPage() {
         { id: 1072, nome: "Fernanda", login: "fernanda" },
         { id: 1073, nome: "Karolline", login: "karolline" },
       ]);
+      setLoading(false);
       return;
     }
-    setItems([]);
     load();
   }, [dia, vendedor, mock, role, user?.nome, closes]);
 
@@ -199,9 +211,11 @@ export function FinalizadosPage() {
             {c.label}
           </button>
         ))}
-        {role === "adm" && <CollaboratorFilter value={vendedor} onChange={setVendedor} team={team} />}
+        {role === "adm" && <CollaboratorFilter value={vendedor} onChange={setVendedor} team={team} busy={loading} />}
       </div>
 
+      <div className="relative space-y-4">
+      <Busy show={loading && !mock} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi n={String(kpis.n)} label="Pedidos" />
         <Kpi n={formatMoney(kpis.valor)} label="Faturamento" green />
@@ -363,6 +377,7 @@ export function FinalizadosPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
       {popup && <PedidoPopup data={popup} onClose={() => setPopup(null)} />}
     </div>

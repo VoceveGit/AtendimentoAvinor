@@ -1,6 +1,7 @@
 import { CheckCircle2, MapPin, Phone, PhoneOff, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Busy } from "../components/Busy";
 import { CollaboratorFilter } from "../components/CollaboratorFilter";
 import { FinalizeModal } from "../components/FinalizeModal";
 import { MotivoModal } from "../components/MotivoModal";
@@ -63,16 +64,27 @@ export function RecuperacaoPage() {
   const [vendedor, setVendedor] = useState("todas");
   const [finalizeFor, setFinalizeFor] = useState<Client | null>(null);
   const [motivoFor, setMotivoFor] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(!mock);
+  const seq = useRef(0);
 
   const scopeId = role === "colaborador" ? user?.vendedor_id ?? null : vendedor === "todas" ? null : Number(vendedor);
 
   const load = () => {
     if (mock) return;
+    const my = ++seq.current;
+    setLoading(true);
     const params = new URLSearchParams({ q, page: "1", page_size: "50", faixa: "todas" });
     if (scopeId) params.set("vendedor", String(scopeId));
     api<Payload>(`/api/clients/recovery?${params}`)
-      .then(setData)
-      .catch((e: Error) => toast.error(e.message));
+      .then((r) => {
+        if (my === seq.current) setData(r);
+      })
+      .catch((e: Error) => {
+        if (my === seq.current) toast.error(e.message);
+      })
+      .finally(() => {
+        if (my === seq.current) setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -103,9 +115,9 @@ export function RecuperacaoPage() {
         ],
         items: filtered,
       });
+      setLoading(false);
       return;
     }
-    setData(null);
     load();
   }, [q, vendedor, mock, scopeId, closes]);
 
@@ -179,7 +191,7 @@ export function RecuperacaoPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CollaboratorFilter value={vendedor} onChange={setVendedor} team={data?.colaboradoras} />
+        <CollaboratorFilter value={vendedor} onChange={setVendedor} team={data?.colaboradoras} busy={loading} />
         <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-extrabold text-rose-600 ring-1 ring-rose-100">
           {role === "colaborador"
             ? `Sua fila · ${data?.pool || 0} cliente(s) · menor tempo parado primeiro`
@@ -187,6 +199,8 @@ export function RecuperacaoPage() {
         </span>
       </div>
 
+      <div className="relative space-y-5">
+      <Busy show={loading && !mock} />
       <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-card">
         <h3 className="font-display text-lg font-extrabold text-slate-900">Como a fila é montada</h3>
         <p className="mb-4 text-sm text-slate-400">
@@ -301,6 +315,7 @@ export function RecuperacaoPage() {
             </ul>
           </section>
         ))}
+      </div>
       </div>
       {finalizeFor && (
         <FinalizeModal

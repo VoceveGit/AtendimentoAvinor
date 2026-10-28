@@ -1,7 +1,8 @@
 import { CalendarDays, CheckCircle2, ChevronDown, MapPin, Phone, Search } from "lucide-react";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Busy } from "../components/Busy";
 import { CollaboratorFilter } from "../components/CollaboratorFilter";
 import { FinalizeModal } from "../components/FinalizeModal";
 import { MotivoModal } from "../components/MotivoModal";
@@ -44,8 +45,12 @@ export function ClientesDiaPage() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [finalizeFor, setFinalizeFor] = useState<Client | null>(null);
   const [motivoFor, setMotivoFor] = useState<{ client: Client; status: Status } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const seq = useRef(0);
 
   const load = () => {
+    const my = ++seq.current;
+    setLoading(true);
     const params = new URLSearchParams({
       q,
       rota,
@@ -57,8 +62,15 @@ export function ClientesDiaPage() {
     const ref = searchParams.get("ref");
     if (ref) params.set("ref", ref);
     api<Payload>(`/api/clients/today?${params}`)
-      .then(setData)
-      .catch((e: Error) => toast.error(e.message));
+      .then((r) => {
+        if (my === seq.current) setData(r);
+      })
+      .catch((e: Error) => {
+        if (my === seq.current) toast.error(e.message);
+      })
+      .finally(() => {
+        if (my === seq.current) setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -130,6 +142,7 @@ export function ClientesDiaPage() {
             setPage(1);
           }}
           team={data?.colaboradoras}
+          busy={loading}
         />
         <NovoAtendimento vendedor={vendedor} onAdded={load} />
       </div>
@@ -204,7 +217,8 @@ export function ClientesDiaPage() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-card">
+      <div className="relative rounded-2xl border border-slate-100 bg-white shadow-card">
+        <Busy show={loading} />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px] text-left text-sm">
             <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-400">

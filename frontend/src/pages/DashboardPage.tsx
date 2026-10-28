@@ -8,7 +8,7 @@ import {
   TriangleAlert,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { Link } from "react-router-dom";
 import { CollaboratorFilter } from "../components/CollaboratorFilter";
 import { api } from "../lib/api";
@@ -17,8 +17,7 @@ import { COLOR_BAR, COLOR_DOT } from "../lib/status";
 import type { Colaboradora } from "../lib/types";
 import { cn, formatDate } from "../lib/utils";
 
-type Dash = {
-  date: string;
+type DashSlice = {
   kpis: {
     clientes_dia: number;
     em_atendimento: number;
@@ -28,36 +27,68 @@ type Dash = {
   };
   bars: { id: string; label: string; color: string; count: number; pct: number }[];
   routes: { id: string; nome: string; clientes: number }[];
+};
+
+type Dash = DashSlice & {
+  date: string;
   colaboradoras?: Colaboradora[];
+  por_colaboradora?: Record<string, DashSlice>;
 };
 
 export function DashboardPage() {
   const { role } = useAuth();
-  const [data, setData] = useState<Dash | null>(null);
+  const [full, setFull] = useState<Dash | null>(null);
   const [err, setErr] = useState("");
   const [vendedor, setVendedor] = useState("todas");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const params = vendedor !== "todas" ? `?vendedor=${vendedor}` : "";
-    api<Dash>(`/api/clients/dashboard${params}`)
-      .then(setData)
-      .catch((e: Error) => setErr(e.message));
-  }, [vendedor]);
+    let live = true;
+    setLoading(true);
+    api<Dash>("/api/clients/dashboard")
+      .then((d) => {
+        if (live) setFull(d);
+      })
+      .catch((e: Error) => {
+        if (live) setErr(e.message);
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const data = useMemo(() => {
+    if (!full) return null;
+    if (vendedor === "todas") return full;
+    const slice = full.por_colaboradora?.[vendedor];
+    return slice ? { ...full, ...slice } : full;
+  }, [full, vendedor]);
 
   if (err) return <p className="rounded-2xl bg-rose-50 p-4 text-sm text-rose-700">{err}</p>;
-  if (!data) return <DashboardSkeleton />;
 
-  const k = data.kpis;
+  const k = data?.kpis;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <CollaboratorFilter value={vendedor} onChange={setVendedor} team={data.colaboradoras} />
-        {k.carteira ? (
+        <CollaboratorFilter
+          value={vendedor}
+          onChange={setVendedor}
+          team={full?.colaboradoras}
+          busy={loading}
+        />
+        {k?.carteira ? (
           <p className="text-sm font-extrabold text-slate-500">
             {k.carteira} clientes na carteira
           </p>
         ) : null}
       </div>
+      {!data || !k ? (
+        <DashboardSkeleton />
+      ) : (
+      <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           to="/clientes-do-dia"
@@ -181,6 +212,8 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

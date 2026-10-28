@@ -14,7 +14,7 @@ from app.db.models import ClientStatus, ExtraAttendance, Status
 from app.db.mysql import fetch_all
 from app.services.normalize import as_float, as_int, as_str, pick
 from app.services.routes_sheet import catalog, resolve_route, routes_for_day
-from app.services.televendas import TELEVENDAS_IDS, public_team, scoped_seller_ids
+from app.services.televendas import TEAM, TELEVENDAS_IDS, public_team, scoped_seller_ids
 
 _agg_cache: dict[str, Any] = {"at": None, "data": {}}
 _base_cache: dict[str, Any] = {"at": None, "data": []}
@@ -169,57 +169,57 @@ async def load_base_clients(force: bool = False) -> list[dict]:
     async with _base_lock:
         if not force and _base_cache["at"] and now - _base_cache["at"] < CACHE_TTL and _base_cache["data"]:
             return _base_cache["data"]
-    settings = get_settings()
-    table = settings.mysql_table_clientes
-    rows = await fetch_all(f"SELECT * FROM `{table}`")
-    clients = []
-    for row in rows:
-        situacao = as_str(pick(row, "Situação", "Situacao")).lower()
-        tipo = as_str(pick(row, "Tp.Cliente", "TpCliente", "tipo")).lower()
-        if situacao not in {"ativo", "ativa"}:
-            continue
-        if "fornecedor" in tipo or "integrado" in tipo:
-            continue
-        cid = as_int(pick(row, "Cliente", "id"))
-        vid = as_int(pick(row, "Vendedor"))
-        if not cid:
-            continue
-        cidade = as_str(pick(row, "Cidade"))
-        bairro = as_str(pick(row, "Bairro"))
-        rota = resolve_route(cidade, bairro)
-        phone = as_str(pick(row, "Telefone")) or as_str(pick(row, "Telefone.1"))
-        numero = as_str(pick(row, "Numero", "Número"))
-        endereco = as_str(pick(row, "Endereço", "Endereco"))
-        if numero and numero.lower() not in endereco.lower():
-            endereco = f"{endereco}, {numero}".strip(", ")
-        cpf = as_str(pick(row, "CPF/CGC", "CPF", "CNPJ", "CGC"))
-        clients.append(
-            {
-                "id": cid,
-                "nome": as_str(pick(row, "Nome Fantasia"))
-                or as_str(pick(row, "Razão Social", "Razao Social")),
-                "razao_social": as_str(pick(row, "Razão Social", "Razao Social")),
-                "endereco": endereco,
-                "bairro": bairro,
-                "cidade": cidade,
-                "uf": as_str(pick(row, "UF")),
-                "telefone": phone,
-                "cpf": cpf,
-                "cpf_digits": re.sub(r"\D", "", cpf),
-                "vendedor_id": vid,
-                "vendedor_nome": as_str(pick(row, "Nome")),
-                "vendedor": as_str(pick(row, "Nome")),
-                "situacao": as_str(pick(row, "Situação", "Situacao")),
-                "tipo": as_str(pick(row, "Tp.Cliente")),
-                "rota_id": rota["id"] if rota else None,
-                "rota_nome": rota["nome"] if rota else None,
-                "enviar_cards": rota["enviar_cards"] if rota else None,
-                "saida_carga": rota["saida_carga"] if rota else None,
-            }
-        )
-    _base_cache["at"] = datetime.utcnow()
-    _base_cache["data"] = clients
-    return clients
+        settings = get_settings()
+        table = settings.mysql_table_clientes
+        rows = await fetch_all(f"SELECT * FROM `{table}`")
+        clients = []
+        for row in rows:
+            situacao = as_str(pick(row, "Situação", "Situacao")).lower()
+            tipo = as_str(pick(row, "Tp.Cliente", "TpCliente", "tipo")).lower()
+            if situacao not in {"ativo", "ativa"}:
+                continue
+            if "fornecedor" in tipo or "integrado" in tipo:
+                continue
+            cid = as_int(pick(row, "Cliente", "id"))
+            vid = as_int(pick(row, "Vendedor"))
+            if not cid:
+                continue
+            cidade = as_str(pick(row, "Cidade"))
+            bairro = as_str(pick(row, "Bairro"))
+            rota = resolve_route(cidade, bairro)
+            phone = as_str(pick(row, "Telefone")) or as_str(pick(row, "Telefone.1"))
+            numero = as_str(pick(row, "Numero", "Número"))
+            endereco = as_str(pick(row, "Endereço", "Endereco"))
+            if numero and numero.lower() not in endereco.lower():
+                endereco = f"{endereco}, {numero}".strip(", ")
+            cpf = as_str(pick(row, "CPF/CGC", "CPF", "CNPJ", "CGC"))
+            clients.append(
+                {
+                    "id": cid,
+                    "nome": as_str(pick(row, "Nome Fantasia"))
+                    or as_str(pick(row, "Razão Social", "Razao Social")),
+                    "razao_social": as_str(pick(row, "Razão Social", "Razao Social")),
+                    "endereco": endereco,
+                    "bairro": bairro,
+                    "cidade": cidade,
+                    "uf": as_str(pick(row, "UF")),
+                    "telefone": phone,
+                    "cpf": cpf,
+                    "cpf_digits": re.sub(r"\D", "", cpf),
+                    "vendedor_id": vid,
+                    "vendedor_nome": as_str(pick(row, "Nome")),
+                    "vendedor": as_str(pick(row, "Nome")),
+                    "situacao": as_str(pick(row, "Situação", "Situacao")),
+                    "tipo": as_str(pick(row, "Tp.Cliente")),
+                    "rota_id": rota["id"] if rota else None,
+                    "rota_nome": rota["nome"] if rota else None,
+                    "enviar_cards": rota["enviar_cards"] if rota else None,
+                    "saida_carga": rota["saida_carga"] if rota else None,
+                }
+            )
+        _base_cache["at"] = datetime.utcnow()
+        _base_cache["data"] = clients
+        return clients
 
 
 async def load_all_clients(force: bool = False) -> list[dict]:
@@ -399,6 +399,7 @@ async def clients_today(
     ref: date | None = None,
     user: dict | None = None,
     vendedor_id: int | None = None,
+    include_products: bool = True,
 ) -> dict:
     day = ref or date.today()
     day_routes = routes_for_day(day)
@@ -466,7 +467,7 @@ async def clients_today(
     total = len(items)
     start = max(page - 1, 0) * page_size
     sliced = items[start : start + page_size]
-    tops = await load_top_products([i["id"] for i in sliced])
+    tops = await load_top_products([i["id"] for i in sliced]) if include_products else {}
     for item in sliced:
         fat = float(item.get("fat_12m") or 0)
         n = int(item.get("n_compras") or 0)
@@ -518,59 +519,89 @@ async def dashboard(
     user: dict | None = None,
     vendedor_id: int | None = None,
 ) -> dict:
+    adm = (user or {}).get("role") == "adm"
+    load_vid = None if adm else vendedor_id
     payload = await clients_today(
-        session, page=1, page_size=10000, ref=ref, user=user, vendedor_id=vendedor_id
+        session,
+        page=1,
+        page_size=10000,
+        ref=ref,
+        user=user,
+        vendedor_id=load_vid,
+        include_products=False,
     )
-    recovery = await clients_recovery(
-        session, page=1, page_size=10000, user=user, vendedor_id=vendedor_id
-    )
-    today_items = payload["items"]
-
-    counts: dict[str, int] = defaultdict(int)
-    for item in today_items:
-        sid = (item.get("status") or {}).get("id") or "atendimento_hoje"
-        if sid == "sem_status":
-            sid = "atendimento_hoje"
-        counts[sid] += 1
-
+    recovery = await clients_recovery(session, page=1, page_size=10000, user=user, vendedor_id=load_vid)
+    base = await load_base_clients()
     statuses = (await session.execute(select(Status).order_by(Status.sort_order))).scalars().all()
-    total = len(today_items) or 1
-    bars = []
-    for s in statuses:
-        if s.id in {"em_recuperacao", "finalizado"}:
-            continue
-        n = counts.get(s.id, 0)
-        bars.append(
-            {
-                "id": s.id,
-                "label": s.label,
-                "color": s.color,
-                "count": n,
-                "pct": round(100 * n / total),
-            }
-        )
+    rec_items = recovery.get("items") or []
+    carteira_by: dict[int, int] = defaultdict(int)
+    for c in base:
+        vid = c.get("vendedor_id")
+        if vid in TELEVENDAS_IDS:
+            carteira_by[int(vid)] += 1
 
-    route_counts = defaultdict(int)
-    for item in today_items:
-        if item.get("rota_id"):
-            route_counts[item["rota_id"]] += 1
+    def _slice(today_items: list[dict], rec_for: list[dict], carteira_n: int) -> dict:
+        counts: dict[str, int] = defaultdict(int)
+        for item in today_items:
+            sid = (item.get("status") or {}).get("id") or "atendimento_hoje"
+            if sid == "sem_status":
+                sid = "atendimento_hoje"
+            counts[sid] += 1
+        total = len(today_items) or 1
+        bars = []
+        for s in statuses:
+            if s.id in {"em_recuperacao", "finalizado"}:
+                continue
+            n = counts.get(s.id, 0)
+            bars.append(
+                {
+                    "id": s.id,
+                    "label": s.label,
+                    "color": s.color,
+                    "count": n,
+                    "pct": round(100 * n / total),
+                }
+            )
+        route_counts: dict[str, int] = defaultdict(int)
+        for item in today_items:
+            if item.get("rota_id"):
+                route_counts[item["rota_id"]] += 1
+        routes = [{**r, "clientes": route_counts.get(r["id"], 0)} for r in payload["routes"]]
+        return {
+            "kpis": {
+                "clientes_dia": len(today_items),
+                "em_atendimento": counts.get("em_atendimento", 0),
+                "atendidos": counts.get("atendido", 0),
+                "em_recuperacao": len(rec_for),
+                "carteira": carteira_n,
+            },
+            "bars": bars,
+            "routes": routes,
+        }
 
-    routes = []
-    for r in payload["routes"]:
-        routes.append({**r, "clientes": route_counts.get(r["id"], 0)})
+    all_today = payload["items"]
+    if vendedor_id:
+        today_items = [i for i in all_today if i.get("vendedor_id") == vendedor_id]
+        rec_for = [i for i in rec_items if i.get("assigned_vendedor_id") == vendedor_id]
+        carteira_n = carteira_by.get(vendedor_id, 0)
+    else:
+        today_items = all_today
+        rec_for = rec_items
+        carteira_n = sum(carteira_by[c.vendedor_id] for c in TEAM)
+
+    built = _slice(today_items, rec_for, carteira_n)
+    por: dict[str, dict] = {}
+    if adm:
+        for col in TEAM:
+            t = [i for i in all_today if i.get("vendedor_id") == col.vendedor_id]
+            r = [i for i in rec_items if i.get("assigned_vendedor_id") == col.vendedor_id]
+            por[str(col.vendedor_id)] = _slice(t, r, carteira_by.get(col.vendedor_id, 0))
 
     return {
         "date": payload["date"],
-        "kpis": {
-            "clientes_dia": len(today_items),
-            "em_atendimento": counts.get("em_atendimento", 0),
-            "atendidos": counts.get("atendido", 0),
-            "em_recuperacao": recovery.get("pool") or recovery.get("total") or 0,
-            "carteira": payload.get("carteira") or 0,
-        },
-        "bars": bars,
-        "routes": routes,
+        **built,
         "colaboradoras": public_team(),
+        "por_colaboradora": por,
         "recovery_high_value": (recovery.get("niveis") or {}).get("90_mais", 0),
     }
 

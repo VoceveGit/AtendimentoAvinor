@@ -13,7 +13,6 @@ import { LoginPage } from "./pages/LoginPage";
 import { RecuperacaoPage } from "./pages/RecuperacaoPage";
 import { RelatoriosPage } from "./pages/RelatoriosPage";
 import { RotasPage } from "./pages/RotasPage";
-import { ScriptCursorPage } from "./pages/ScriptCursorPage";
 
 function Guard({ admin }: { admin?: boolean }) {
   const { role } = useAuth();
@@ -42,7 +41,7 @@ export default function App() {
                 <Route path="/config-status" element={<ConfigStatusPage />} />
                 <Route path="/config-banco" element={<ConfigBancoPage />} />
                 <Route path="/importar-planilha" element={<ImportarPage />} />
-                <Route path="/script-cursor" element={<ScriptCursorPage />} />
+                <Route path="/script-cursor" element={<Navigate to="/dashboard" replace />} />
               </Route>
             </Route>
           </Route>

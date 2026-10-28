@@ -6,9 +6,10 @@ type Props = {
   value: string;
   onChange: (id: string) => void;
   team?: Colaboradora[];
+  busy?: boolean;
 };
 
-export function CollaboratorFilter({ value, onChange, team }: Props) {
+export function CollaboratorFilter({ value, onChange, team, busy }: Props) {
   const { user } = useAuth();
   if (user?.role !== "adm") return null;
   const items = team?.length
@@ -21,7 +22,10 @@ export function CollaboratorFilter({ value, onChange, team }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Colaboradora</span>
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+        Colaboradora
+        {busy ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-avinor border-t-transparent" /> : null}
+      </span>
       <button
         type="button"
         onClick={() => onChange("todas")}
