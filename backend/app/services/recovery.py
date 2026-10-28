@@ -116,14 +116,19 @@ async def clients_recovery(
         metrics = agg.get(asg.cliente_id) or {}
         if not _match_query(base, q):
             continue
+        days = metrics.get("dias_sem_contato")
+        live = stage_of(days)
+        if not live:
+            # Comprou de novo — não é recuperação.
+            continue
         item = _hydrate(base, metrics, status_by_id, by_cs.get(asg.cliente_id), apply_default=True)
-        item["nivel"] = asg.faixa
+        item["nivel"] = live
         item["origem"] = "recuperacao"
         item["assigned_vendedor_id"] = asg.vendedor_id
         item["assigned_vendedor_nome"] = team_name.get(asg.vendedor_id)
         item["close_kind"] = closed.get(asg.cliente_id)
-        niveis[asg.faixa] = niveis.get(asg.faixa, 0) + 1
-        if faixa and faixa not in {"", "todas"} and asg.faixa != faixa:
+        niveis[live] = niveis.get(live, 0) + 1
+        if faixa and faixa not in {"", "todas"} and live != faixa:
             continue
         items.append(item)
 
