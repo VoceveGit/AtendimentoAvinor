@@ -87,8 +87,11 @@ export function RecuperacaoPage() {
         const demo = closes[c.id];
         return demo ? { ...c, close_kind: demo.kind } : c;
       });
-      const niveis = { "31_60": 0, "61_90": 0, "90_mais": 0 };
-      for (const c of filtered) niveis[c.nivel || "90_mais"] += 1;
+      const niveis: Record<"31_60" | "61_90" | "90_mais", number> = { "31_60": 0, "61_90": 0, "90_mais": 0 };
+      for (const c of filtered) {
+        const nivel = c.nivel;
+        if (nivel === "31_60" || nivel === "61_90" || nivel === "90_mais") niveis[nivel] += 1;
+      }
       setData({
         total: filtered.length,
         pool: filtered.length,

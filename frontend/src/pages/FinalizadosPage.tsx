@@ -76,7 +76,7 @@ export function FinalizadosPage() {
       const mineName = role === "colaborador" ? user?.nome : vendedor === "todas" ? null : GIRL_BY_ID[Number(vendedor)];
       const recovered = Object.values(closes)
         .filter((c) => c.kind === "finalizado")
-        .filter((c) => dia === today)
+        .filter(() => dia === today)
         .map((c) => ({
           id: 8000 + c.cliente_id,
           cliente_id: c.cliente_id,
