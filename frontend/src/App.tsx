@@ -4,6 +4,7 @@ import { AppShell } from "./components/AppShell";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { DemoProvider } from "./lib/demo";
 import { ClientesDiaPage } from "./pages/ClientesDiaPage";
+import { ColaboradoresPage } from "./pages/ColaboradoresPage";
 import { ConfigBancoPage } from "./pages/ConfigBancoPage";
 import { ConfigStatusPage } from "./pages/ConfigStatusPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/finalizados" element={<FinalizadosPage />} />
               <Route path="/rotas" element={<RotasPage />} />
               <Route element={<Guard admin />}>
+                <Route path="/colaboradores" element={<ColaboradoresPage />} />
                 <Route path="/relatorios" element={<RelatoriosPage />} />
                 <Route path="/config-status" element={<ConfigStatusPage />} />
                 <Route path="/config-banco" element={<ConfigBancoPage />} />

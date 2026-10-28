@@ -97,6 +97,22 @@ class RecoveryAssignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Account(Base):
+    __tablename__ = "avinor_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="colaborador")
+    nome: Mapped[str] = mapped_column(String(80), nullable=False)
+    login: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    password_enc: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    vendedor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    aliases: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class DayClose(Base):
     __tablename__ = "avinor_day_closes"
     __table_args__ = (UniqueConstraint("cliente_id", "dia", "origem", name="uq_close_cliente_dia_origem"),)

@@ -24,6 +24,23 @@ function rec(
   nivel: Client["nivel"],
 ): Client {
   const g = GIRLS[girl % 3];
+  const offers = [
+    [
+      { nome: "Farinha de trigo 1kg", valor: 186 },
+      { nome: "Óleo de soja 900ml", valor: 142 },
+      { nome: "Açúcar cristal 1kg", valor: 98 },
+    ],
+    [
+      { nome: "Arroz tipo 1 5kg", valor: 240 },
+      { nome: "Feijão carioca 1kg", valor: 121 },
+      { nome: "Macarrão espaguete", valor: 87 },
+    ],
+    [
+      { nome: "Café torrado 500g", valor: 165 },
+      { nome: "Leite integral 1L", valor: 134 },
+      { nome: "Biscoito cream cracker", valor: 76 },
+    ],
+  ];
   return {
     id,
     nome,
@@ -39,6 +56,7 @@ function rec(
     vendedor_id: g.id,
     vendedor_nome: g.nome,
     endereco: `${cidade} · ${rota}`,
+    produtos_top: offers[id % 3],
   };
 }
 

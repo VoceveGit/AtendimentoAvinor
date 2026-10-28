@@ -175,3 +175,8 @@ async def init_write_db() -> None:
                 )
             )
         await session.commit()
+
+    from app.services.accounts import seed_accounts
+
+    async with session_factory()() as session:
+        await seed_accounts(session)

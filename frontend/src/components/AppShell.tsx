@@ -3,6 +3,7 @@ import {
   Database,
   FileSpreadsheet,
   Headphones,
+  IdCard,
   LayoutDashboard,
   LogOut,
   MapPinned,
@@ -29,6 +30,7 @@ const MAIN = [
 ];
 
 const ADMIN = [
+  { to: "/colaboradores", label: "Colaboradores", icon: IdCard },
   { to: "/relatorios", label: "Analytics ADM", icon: PieChart },
   { to: "/config-status", label: "Configurar Status", icon: Settings2 },
   { to: "/config-banco", label: "Conexão de Banco", icon: Database },
@@ -45,6 +47,10 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/finalizados": {
     title: "Finalizados",
     subtitle: "Pedidos concluídos — unificando carteira e recuperação",
+  },
+  "/colaboradores": {
+    title: "Colaboradores",
+    subtitle: "Contas, logins e senhas da equipe — o ADM também muda o próprio acesso",
   },
   "/relatorios": {
     title: "A história do mês",

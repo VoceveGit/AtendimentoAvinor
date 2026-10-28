@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Busy } from "../components/Busy";
 import { CollaboratorFilter } from "../components/CollaboratorFilter";
+import { RecoveryHint } from "../components/RecoveryHint";
 import { FinalizeModal } from "../components/FinalizeModal";
 import { MotivoModal } from "../components/MotivoModal";
 import { api } from "../lib/api";
@@ -65,6 +66,7 @@ export function RecuperacaoPage() {
   const [finalizeFor, setFinalizeFor] = useState<Client | null>(null);
   const [motivoFor, setMotivoFor] = useState<Client | null>(null);
   const [loading, setLoading] = useState(!mock);
+  const [hintId, setHintId] = useState<number | null>(null);
   const seq = useRef(0);
 
   const scopeId = role === "colaborador" ? user?.vendedor_id ?? null : vendedor === "todas" ? null : Number(vendedor);
@@ -236,8 +238,8 @@ export function RecuperacaoPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
-        {COLS.map((col) => (
-          <section key={col.id} className={cn("rounded-3xl border bg-gradient-to-b p-4 shadow-card", col.tone)}>
+        {COLS.map((col, colIdx) => (
+          <section key={col.id} className={cn("overflow-visible rounded-3xl border bg-gradient-to-b p-4 shadow-card", col.tone)}>
             <div className="mb-3 flex items-end justify-between">
               <div>
                 <h3 className="font-display text-xl font-black text-slate-900">{col.label}</h3>
@@ -245,15 +247,25 @@ export function RecuperacaoPage() {
               </div>
               <p className={cn("font-display text-4xl font-black tabular-nums", col.num)}>{grouped[col.id].length}</p>
             </div>
-            <ul className="space-y-2.5">
+            <ul className="space-y-2.5 overflow-visible">
               {grouped[col.id].map((c) => (
                 <li
                   key={c.id}
                   className={cn(
-                    "rounded-2xl border border-white/80 bg-white p-3 shadow-sm",
+                    "relative cursor-pointer rounded-2xl border border-white/80 bg-white p-3 shadow-sm transition",
                     c.close_kind && "opacity-55",
+                    hintId === c.id && "z-20 ring-2 ring-avinor/20",
                   )}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => setHintId((cur) => (cur === c.id ? null : c.id))}
                 >
+                  {hintId === c.id && (
+                    <RecoveryHint
+                      client={c}
+                      side={colIdx === 2 ? "left" : "right"}
+                      onClose={() => setHintId(null)}
+                    />
+                  )}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-extrabold text-slate-900">{c.nome}</p>
@@ -280,7 +292,7 @@ export function RecuperacaoPage() {
                           : "Não atendido hoje"}
                     </p>
                   ) : (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    <div className="mt-3 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => setFinalizeFor(c)}

@@ -18,6 +18,7 @@ from app.routes.clients import router as clients_router
 from app.routes.db_config import router as db_router
 from app.routes.imports import router as import_router
 from app.routes.prompt import router as prompt_router
+from app.routes.accounts import router as accounts_router
 from app.routes.statuses import router as statuses_router
 from app.routes.ops import router as ops_router
 from app.routes.week import router as week_router
@@ -85,6 +86,7 @@ app.include_router(import_router)
 app.include_router(week_router)
 app.include_router(ops_router)
 app.include_router(prompt_router)
+app.include_router(accounts_router)
 
 
 @app.get("/api/health")

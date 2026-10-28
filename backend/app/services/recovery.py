@@ -12,6 +12,7 @@ from app.services.clients import (
     _status_maps,
     load_aggregates,
     load_all_clients,
+    load_top_products,
 )
 from app.services.routes_sheet import routes_for_day
 from app.services.televendas import TEAM, TELEVENDAS_IDS, public_team, scoped_seller_ids
@@ -129,6 +130,10 @@ async def clients_recovery(
     items.sort(key=lambda c: (c.get("dias_sem_contato") or 0, c.get("nome") or ""))
     total = len(items)
     start = max(page - 1, 0) * page_size
+    sliced = items[start : start + page_size]
+    tops = await load_top_products([i["id"] for i in sliced], per_client=3)
+    for item in sliced:
+        item["produtos_top"] = tops.get(item["id"], [])
     return {
         "date": day.isoformat(),
         "total": total,
@@ -138,5 +143,5 @@ async def clients_recovery(
         "niveis": niveis,
         "precisam_contato": niveis.get("90_mais", 0),
         "colaboradoras": public_team(),
-        "items": items[start : start + page_size],
+        "items": sliced,
     }
