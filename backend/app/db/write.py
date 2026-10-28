@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -11,18 +12,39 @@ from app.db.models import Base, DbConfig, SEED_STATUSES, Status
 _engine = None
 _session = None
 
+# libpq query keys that asyncpg.connect() rejects (Neon includes channel_binding).
+_ASYNCPG_DROP = {
+    "sslmode",
+    "ssl",
+    "channel_binding",
+    "gssencmode",
+    "requiressl",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslcrl",
+    "sslnegotiation",
+}
+
+
+def neon_asyncpg_url(raw: str) -> str:
+    url = (raw or "").strip()
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    parsed = urlparse(url)
+    scheme = parsed.scheme or "postgresql"
+    if "+asyncpg" not in scheme:
+        scheme = "postgresql+asyncpg"
+    query = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() not in _ASYNCPG_DROP]
+    return urlunparse(parsed._replace(scheme=scheme, query=urlencode(query))).rstrip("?")
+
 
 def _url() -> str:
     settings = get_settings()
     if settings.neon_database_url:
-        url = settings.neon_database_url.strip()
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://") and "+asyncpg" not in url:
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        url = url.replace("sslmode=require", "").replace("ssl=require", "")
-        url = url.replace("?&", "?").rstrip("?&")
-        return url
+        return neon_asyncpg_url(settings.neon_database_url)
     return settings.write_database_url
 
 
