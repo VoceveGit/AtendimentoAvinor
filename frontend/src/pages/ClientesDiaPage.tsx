@@ -1,5 +1,5 @@
 import { CalendarDays, CheckCircle2, ChevronDown, MapPin, Phone, Search } from "lucide-react";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Busy } from "../components/Busy";
@@ -51,14 +51,7 @@ export function ClientesDiaPage() {
   const load = () => {
     const my = ++seq.current;
     setLoading(true);
-    const params = new URLSearchParams({
-      q,
-      rota,
-      status,
-      page: String(page),
-      page_size: String(PAGE_SIZE),
-    });
-    if (vendedor !== "todas") params.set("vendedor", vendedor);
+    const params = new URLSearchParams({ page: "1", page_size: "500" });
     const ref = searchParams.get("ref");
     if (ref) params.set("ref", ref);
     api<Payload>(`/api/clients/today?${params}`)
@@ -81,7 +74,50 @@ export function ClientesDiaPage() {
 
   useEffect(() => {
     load();
-  }, [q, rota, status, page, vendedor, refDay]);
+  }, [refDay]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, rota, status, vendedor]);
+
+  const matchQuery = (c: Client, needle: string) => {
+    if (!needle) return true;
+    const blob = `${c.nome} ${c.razao_social || ""} ${c.endereco} ${c.cidade || ""} ${c.bairro || ""} ${c.id} ${c.cpf || ""}`.toLowerCase();
+    return blob.includes(needle);
+  };
+
+  const scoped = useMemo(() => {
+    const items = data?.items || [];
+    if (vendedor === "todas") return items;
+    return items.filter((c) => String(c.vendedor_id) === vendedor);
+  }, [data, vendedor]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return scoped.filter((c) => {
+      if (rota !== "todas" && c.rota_id !== rota && !c.extra_hoje && !c.agendado_hoje) return false;
+      if (status === "agendados") {
+        if (!(c.data_atendimento && c.status_id !== "atendido")) return false;
+      } else if (status !== "todos" && c.status_id !== status) {
+        return false;
+      }
+      return matchQuery(c, needle);
+    });
+  }, [scoped, q, rota, status]);
+
+  const agendados = useMemo(
+    () => scoped.filter((c) => c.data_atendimento && c.status_id !== "atendido").length,
+    [scoped],
+  );
+
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const patchClient = (id: number, patch: Partial<Client>) => {
+    setData((cur) => {
+      if (!cur) return cur;
+      return { ...cur, items: cur.items.map((c) => (c.id === id ? { ...c, ...patch } : c)) };
+    });
+  };
 
   const changeStatus = async (id: number, status_id: string, extra?: { data_atendimento?: string }) => {
     try {
@@ -94,7 +130,13 @@ export function ClientesDiaPage() {
       } else {
         toast.success("Status atualizado.");
       }
-      load();
+      const meta = statuses.find((s) => s.id === status_id) || null;
+      patchClient(id, {
+        status_id,
+        status: meta,
+        data_atendimento: extra?.data_atendimento ?? undefined,
+        agendado_hoje: extra?.data_atendimento ? extra.data_atendimento.slice(0, 10) === (data?.date || "") : undefined,
+      });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -142,7 +184,7 @@ export function ClientesDiaPage() {
             setPage(1);
           }}
           team={data?.colaboradoras}
-          busy={loading}
+          busy={loading && !data}
         />
         <NovoAtendimento vendedor={vendedor} onAdded={load} />
       </div>
@@ -200,7 +242,7 @@ export function ClientesDiaPage() {
           }}
         >
           <CalendarDays className="mr-1 h-3 w-3" />
-          Agendados ({data?.agendados || 0})
+          Agendados ({agendados})
         </Pill>
         {statusPills.map((s) => (
           <Pill
@@ -236,7 +278,7 @@ export function ClientesDiaPage() {
               </tr>
             </thead>
             <tbody>
-              {(data?.items || []).map((c) => {
+              {pageItems.map((c) => {
                 const expanded = open.has(c.id);
                 return (
                   <Fragment key={c.id}>
@@ -330,7 +372,7 @@ export function ClientesDiaPage() {
                   </Fragment>
                 );
               })}
-              {data && data.items.length === 0 && (
+              {data && pageItems.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-5 py-16 text-center text-sm text-slate-500">
                     {status === "agendados" ? "Nenhum cliente agendado." : "Nenhum cliente neste filtro."}
@@ -340,7 +382,7 @@ export function ClientesDiaPage() {
             </tbody>
           </table>
         </div>
-        <TablePager page={page} pageSize={PAGE_SIZE} total={data?.total || 0} onPage={setPage} />
+        <TablePager page={page} pageSize={PAGE_SIZE} total={filtered.length} onPage={setPage} />
       </div>
       {finalizeFor && (
         <FinalizeModal

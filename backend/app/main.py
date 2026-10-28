@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import PROJECT_ROOT, ROOT, get_settings
 from app.db.mysql import close_mysql
-from app.db.write import init_write_db
+from app.db.write import init_write_db, write_backend
 from app.routes.auth import router as auth_router
 from app.routes.clients import router as clients_router
 from app.routes.db_config import router as db_router
@@ -45,6 +45,13 @@ async def _warmup() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_write_db()
+    backend = write_backend()
+    print(f"[avinor] escrita: {backend}")
+    if backend != "neon" and os.getenv("RENDER"):
+        print(
+            "[avinor] AVISO: sem NEON_DATABASE_URL o Docker do Render grava num SQLite "
+            "que some a cada deploy — status, finalizados e atendimentos não persistem."
+        )
     task = None
     if os.getenv("AVINOR_SKIP_WARMUP") != "1":
         task = asyncio.create_task(_warmup())
@@ -82,11 +89,25 @@ app.include_router(prompt_router)
 
 @app.get("/api/health")
 async def health():
+    from sqlalchemy import text as sql_text
+
+    from app.db.write import engine
+
+    backend = write_backend()
+    write_ok = False
+    try:
+        async with engine().connect() as conn:
+            await conn.execute(sql_text("SELECT 1"))
+            write_ok = True
+    except Exception as exc:  # pragma: no cover
+        print(f"[avinor] ping escrita falhou: {exc}")
     return {
         "ok": True,
         "service": "avinor-atendimento",
         "mysql_readonly": True,
-        "write": "neon" if settings.neon_database_url else "sqlite",
+        "write": backend,
+        "write_ok": write_ok,
+        "write_persistent": backend == "neon",
     }
 
 

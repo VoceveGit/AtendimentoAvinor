@@ -13,8 +13,9 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { apiUrl } from "../lib/api";
+import { api, apiUrl } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { useDemo } from "../lib/demo";
 import { cn } from "../lib/utils";
@@ -71,6 +72,13 @@ export function AppShell() {
   const location = useLocation();
   const meta = TITLES[location.pathname] || { title: "Avinor", subtitle: "" };
   const isAdm = role === "adm";
+  const [writeBackend, setWriteBackend] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isAdm) return;
+    api<{ write?: string; write_persistent?: boolean }>("/api/health")
+      .then((h) => setWriteBackend(h.write || null))
+      .catch(() => undefined);
+  }, [isAdm]);
   const subtitle =
     !isAdm && location.pathname === "/dashboard"
       ? `Sua carteira · ${user?.nome}`
@@ -162,6 +170,12 @@ export function AppShell() {
           </div>
         </header>
         <main className="flex-1 px-8 pb-10 pt-4">
+          {isAdm && writeBackend === "sqlite" && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+              A escrita está no SQLite local — no Render isso some no deploy (status apagado volta, finalizado some).
+              Em Conexão de Banco cole a URL do Neon e também cadastre <span className="font-extrabold">NEON_DATABASE_URL</span> no Environment do serviço.
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

@@ -5,7 +5,8 @@ import { api } from "../lib/api";
 
 type Cfg = {
   mysql: { host: string; port: number; database: string; user: string; password: string; ssl: boolean; connected: boolean; readonly: boolean };
-  neon: { connection_string: string; pool_min: number; pool_max: number; ssl: boolean; connected: boolean };
+  neon: { connection_string: string; pool_min: number; pool_max: number; ssl: boolean; connected: boolean; write?: string };
+  write?: string;
 };
 
 export function ConfigBancoPage() {
@@ -37,8 +38,14 @@ export function ConfigBancoPage() {
   };
   const save = async () => {
     try {
-      await api("/api/db/save-config", { method: "POST", body: JSON.stringify(cfg) });
-      toast.success("Configurações salvas. MySQL permanece somente consulta.");
+      const r = await api<{ write?: string }>("/api/db/save-config", { method: "POST", body: JSON.stringify(cfg) });
+      toast.success(
+        r.write === "neon"
+          ? "Neon conectado. Status, atendimentos e finalizados passam a gravar lá."
+          : "Salvo, mas a escrita ainda é SQLite — no Render isso some no deploy. Coloque NEON_DATABASE_URL no Environment.",
+      );
+      const next = await api<Cfg>("/api/db/config");
+      setCfg(next);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -103,8 +110,14 @@ export function ConfigBancoPage() {
                 <p className="text-xs text-slate-500">Armazena status, histórico e configurações</p>
               </div>
             </div>
-            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-              {cfg.neon.connection_string ? "Conectado" : "SQLite local"}
+            <span
+              className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                cfg.write === "neon" || cfg.neon.connected
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-amber-50 text-amber-800"
+              }`}
+            >
+              {cfg.write === "neon" || cfg.neon.connected ? "Gravando no Neon" : "SQLite (some no deploy)"}
             </span>
           </div>
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">Connection string</label>
@@ -125,9 +138,14 @@ export function ConfigBancoPage() {
             <Field label="Pool máximo" value={String(cfg.neon.pool_max)} onChange={(v) => setCfg({ ...cfg, neon: { ...cfg.neon, pool_max: Number(v) || 10 } })} />
           </div>
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-            A conexão Neon é usada exclusivamente para persistência dos status, logs de atendimento e configuração dinâmica.
-            Sem a string, o painel grava num SQLite local.
+            Status, atendimentos, finalizados e analytics gravam aqui. No Render a URL também precisa estar em
+            Environment → <span className="font-extrabold">NEON_DATABASE_URL</span> — o disco do Docker apaga o SQLite a cada deploy.
           </p>
+          {cfg.write !== "neon" && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              Agora mesmo o painel não está no Neon. Por isso status apagado volta depois do deploy.
+            </p>
+          )}
           <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={cfg.neon.ssl} onChange={(e) => setCfg({ ...cfg, neon: { ...cfg.neon, ssl: e.target.checked } })} />
             SSL obrigatório

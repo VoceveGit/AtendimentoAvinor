@@ -11,6 +11,8 @@ from app.db.models import Base, DbConfig, SEED_STATUSES, Status
 
 _engine = None
 _session = None
+_runtime_neon_url: str | None = None
+_runtime_ssl: bool | None = None
 
 # libpq query keys that asyncpg.connect() rejects (Neon includes channel_binding).
 _ASYNCPG_DROP = {
@@ -42,10 +44,31 @@ def neon_asyncpg_url(raw: str) -> str:
 
 
 def _url() -> str:
-    settings = get_settings()
-    if settings.neon_database_url:
-        return neon_asyncpg_url(settings.neon_database_url)
-    return settings.write_database_url
+    raw = (_runtime_neon_url or get_settings().neon_database_url or "").strip()
+    if raw:
+        return neon_asyncpg_url(raw)
+    return get_settings().write_database_url
+
+
+def write_backend() -> str:
+    url = _url()
+    if "+asyncpg" in url or url.startswith("postgresql"):
+        return "neon"
+    return "sqlite"
+
+
+def asyncpg_dsn(raw: str) -> str:
+    return neon_asyncpg_url(raw).replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
+async def apply_runtime_neon(url: str, ssl: bool = True) -> None:
+    global _runtime_neon_url, _runtime_ssl, _engine, _session
+    _runtime_neon_url = (url or "").strip() or None
+    _runtime_ssl = ssl
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _session = None
 
 
 def engine():
@@ -56,7 +79,8 @@ def engine():
         if url.startswith("sqlite"):
             kwargs["connect_args"] = {"check_same_thread": False}
         elif "asyncpg" in url:
-            kwargs["connect_args"] = {"ssl": True} if get_settings().neon_ssl else {}
+            use_ssl = get_settings().neon_ssl if _runtime_ssl is None else _runtime_ssl
+            kwargs["connect_args"] = {"ssl": True} if use_ssl else {}
             kwargs["pool_size"] = get_settings().neon_pool_min
             kwargs["max_overflow"] = max(get_settings().neon_pool_max - get_settings().neon_pool_min, 0)
         _engine = create_async_engine(url, **kwargs)
@@ -92,9 +116,10 @@ async def init_write_db() -> None:
         await conn.run_sync(_ensure_status_columns)
 
     async with session_factory()() as session:
-        existing = {row.id for row in (await session.execute(select(Status))).scalars()}
-        for sid, label, color, order, system, requires_motivo in SEED_STATUSES:
-            if sid not in existing:
+        existing_rows = list((await session.execute(select(Status))).scalars())
+        if not existing_rows:
+            # Só na instalação vazia. Status apagado pelo ADM não volta no próximo boot.
+            for sid, label, color, order, system, requires_motivo in SEED_STATUSES:
                 session.add(
                     Status(
                         id=sid,
@@ -106,15 +131,12 @@ async def init_write_db() -> None:
                         requires_motivo=requires_motivo,
                     )
                 )
-            else:
-                row = await session.get(Status, sid)
-                if row and requires_motivo and not row.requires_motivo:
-                    row.requires_motivo = True
         has_default = any(row.is_default for row in (await session.execute(select(Status))).scalars())
         if not has_default:
             seeded = await session.get(Status, "atendimento_hoje")
-            if seeded:
-                seeded.is_default = True
+            fallback = seeded or (await session.execute(select(Status))).scalars().first()
+            if fallback:
+                fallback.is_default = True
 
         mysql_cfg = (
             await session.execute(select(DbConfig).where(DbConfig.kind == "mysql"))

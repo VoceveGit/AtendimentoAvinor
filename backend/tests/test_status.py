@@ -20,6 +20,8 @@ async def test_list_and_create_status():
         ids = {s["id"] for s in listed.json()}
         assert "em_atendimento" in ids
         assert "em_recuperacao" in ids
+        if "atendimento_hoje" in ids:
+            await client.post("/api/statuses/atendimento_hoje/default")
 
         created = await client.post("/api/statuses", json={"label": "Aguardando retorno", "color": "sky"})
         assert created.status_code == 200
@@ -41,3 +43,30 @@ async def test_list_and_create_status():
 
         blocked = await client.post("/api/statuses/em_recuperacao/default")
         assert blocked.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_deleted_status_does_not_come_back_on_boot():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/api/statuses", json={"label": "Temporario Persist", "color": "sky"})
+        assert created.status_code == 200
+        sid = created.json()["id"]
+        deleted = await client.delete(f"/api/statuses/{sid}")
+        assert deleted.status_code == 200
+        await init_write_db()
+        listed = await client.get("/api/statuses")
+        ids = {s["id"] for s in listed.json()}
+        assert sid not in ids
+        assert "atendimento_hoje" in ids
+
+        seed_id = "visita_marcada" if "visita_marcada" in ids else next(
+            (i for i in ids if i not in {"em_recuperacao", "finalizado", "atendimento_hoje"}),
+            None,
+        )
+        if seed_id:
+            gone = await client.delete(f"/api/statuses/{seed_id}")
+            assert gone.status_code == 200
+            await init_write_db()
+            ids = {s["id"] for s in (await client.get("/api/statuses")).json()}
+            assert seed_id not in ids

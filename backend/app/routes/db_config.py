@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.crypto import decrypt_text, encrypt_text
 from app.db.models import DbConfig
 from app.db.mysql import apply_runtime_mysql, test_mysql
-from app.db.write import get_session
+from app.db.write import apply_runtime_neon, asyncpg_dsn, get_session, init_write_db, write_backend
 
 router = APIRouter(prefix="/api/db", tags=["db"])
 
@@ -68,8 +68,10 @@ async def get_config(session: AsyncSession = Depends(get_session)):
             "pool_min": neon.get("pool_min") or settings.neon_pool_min,
             "pool_max": neon.get("pool_max") or settings.neon_pool_max,
             "ssl": bool(neon.get("ssl", True)),
-            "connected": bool(neon_url),
+            "connected": write_backend() == "neon",
+            "write": write_backend(),
         },
+        "write": write_backend(),
     }
 
 
@@ -93,7 +95,8 @@ async def post_test_neon(payload: NeonIn):
     try:
         import asyncpg
 
-        conn = await asyncpg.connect(payload.connection_string, timeout=10)
+        dsn = asyncpg_dsn(payload.connection_string)
+        conn = await asyncpg.connect(dsn, timeout=10, ssl=True if payload.ssl else False)
         try:
             val = await conn.fetchval("SELECT 1")
         finally:
@@ -148,4 +151,7 @@ async def save_config(payload: SaveIn, session: AsyncSession = Depends(get_sessi
             "ssl": payload.mysql.ssl,
         }
     )
-    return {"ok": True, "readonly": True}
+    if payload.neon.connection_string.strip():
+        await apply_runtime_neon(payload.neon.connection_string, ssl=payload.neon.ssl)
+        await init_write_db()
+    return {"ok": True, "readonly": True, "write": write_backend()}
