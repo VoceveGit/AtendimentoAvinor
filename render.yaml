@@ -1,0 +1,32 @@
+# Blueprint do Render — um serviço só (API + painel)
+# No dashboard: New → Blueprint → este repositório.
+# Depois preencha MYSQL_PASSWORD e NEON_DATABASE_URL.
+
+services:
+  - type: web
+    name: avinor-atendimento
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: AVINOR_SECRET_KEY
+        generateValue: true
+      - key: MYSQL_HOST
+        value: 45.79.29.86
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_USER
+        value: gccconsultoria
+      - key: MYSQL_DATABASE
+        value: EXTRACTOR
+      - key: MYSQL_SSL
+        value: "false"
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: NEON_DATABASE_URL
+        sync: false
+      - key: NEON_SSL
+        value: "true"
+      - key: AVINOR_SKIP_WARMUP
+        value: "0"
