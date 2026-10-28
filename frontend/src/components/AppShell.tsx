@@ -59,7 +59,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/rotas": { title: "Rotas da Semana", subtitle: "Distribuição semanal de atendimento por rota (Enviar cards)" },
   "/config-status": {
     title: "Configurador de Status",
-    subtitle: "Crie, edite e organize os status que aparecem no droplist das tabelas",
+    subtitle: "Status do atendimento e motivos prontos para a vendedora só escolher",
   },
   "/config-banco": {
     title: "Conexão de Banco de Dados",

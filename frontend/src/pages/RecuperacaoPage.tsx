@@ -289,7 +289,9 @@ export function RecuperacaoPage() {
                   {c.close_kind ? (
                     <p className="mt-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
                       {c.close_kind === "finalizado"
-                        ? "Recuperado"
+                        ? "Recuperado com venda"
+                        : c.close_kind === "recuperado"
+                          ? "Recuperado · vai para a carteira"
                         : c.close_kind === "nao_recuperado"
                           ? "Não recuperado"
                           : "Não atendido hoje"}
@@ -338,13 +340,16 @@ export function RecuperacaoPage() {
           clienteNome={finalizeFor.nome}
           origem="recuperacao"
           simulate={mock}
+          rotaNome={finalizeFor.rota_nome}
+          enviarCards={finalizeFor.enviar_cards}
+          cidade={finalizeFor.cidade}
           onCancel={() => setFinalizeFor(null)}
           onDone={(extra) => {
             if (mock) {
               recordClose({
                 cliente_id: finalizeFor.id,
                 cliente_nome: finalizeFor.nome,
-                kind: "finalizado",
+                kind: extra?.kind || "recuperado",
                 codigo: extra?.codigo,
                 valor: extra?.valor,
                 origem: "recuperacao",
@@ -360,7 +365,7 @@ export function RecuperacaoPage() {
       {motivoFor && (
         <MotivoModal
           title="Não recuperado"
-          hint="Descreva o motivo — entra nos relatórios do ADM por cidade."
+          hint="Escolha o motivo cadastrado — entra nos relatórios do ADM."
           onCancel={() => setMotivoFor(null)}
           onConfirm={confirmMotivo}
         />

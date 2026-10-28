@@ -1,5 +1,12 @@
 export type Role = "adm" | "colaborador";
 
+export type Motivo = {
+  id: string;
+  label: string;
+  active?: boolean;
+  order?: number;
+};
+
 export type Status = {
   id: string;
   label: string;

@@ -21,7 +21,7 @@ class FinalizeIn(BaseModel):
 
 class CloseIn(BaseModel):
     kind: str
-    motivo: str
+    motivo: str = ""
     origem: str = "carteira"
 
 

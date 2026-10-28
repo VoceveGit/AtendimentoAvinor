@@ -234,13 +234,15 @@ const MOCK_CLIENTES = [
   ["Empório da Serra", "Anagé", "ANAGÉ"],
 ];
 
-const MOCK_MOTIVOS = [
-  "Comprou com concorrente",
-  "Preço",
-  "Sem demanda hoje",
-  "Mudou de ramo",
+export const MOCK_MOTIVOS = [
+  "Preço alto",
+  "Comprou com o concorrente",
+  "Sem demanda no momento",
   "Problema de crédito",
-  "Entrega",
+  "Mudou de ramo / fechou",
+  "Prazo ou entrega",
+  "Cliente viajando",
+  "Estoque cheio",
 ];
 
 function isoOnWeekday(di: number, hour: number, minute: number, weekOffset = 0) {
@@ -382,20 +384,20 @@ export const MOCK_ANALYTICS = {
     { cidade: "Poções", nome: "Linguiça defumada", qtd: 90, valor: 2790 },
   ],
   motivos: [
-    { cidade: "Vitória da Conquista", motivo: "Comprou com concorrente", n: 18 },
-    { cidade: "Jequié", motivo: "Preço", n: 14 },
-    { cidade: "Poções", motivo: "Sem demanda hoje", n: 10 },
-    { cidade: "Itambé", motivo: "Mudou de ramo", n: 6 },
+    { cidade: "Vitória da Conquista", motivo: "Comprou com o concorrente", n: 18 },
+    { cidade: "Jequié", motivo: "Preço alto", n: 14 },
+    { cidade: "Poções", motivo: "Sem demanda no momento", n: 10 },
+    { cidade: "Itambé", motivo: "Mudou de ramo / fechou", n: 6 },
     { cidade: "Barra do Choça", motivo: "Problema de crédito", n: 5 },
-    { cidade: "Brumado", motivo: "Entrega", n: 4 },
+    { cidade: "Brumado", motivo: "Prazo ou entrega", n: 4 },
   ],
   motivos_nuvem: [
-    { motivo: "Comprou com concorrente", n: 42 },
-    { motivo: "Preço", n: 31 },
-    { motivo: "Sem demanda hoje", n: 24 },
-    { motivo: "Mudou de ramo", n: 11 },
+    { motivo: "Comprou com o concorrente", n: 42 },
+    { motivo: "Preço alto", n: 31 },
+    { motivo: "Sem demanda no momento", n: 24 },
+    { motivo: "Mudou de ramo / fechou", n: 11 },
     { motivo: "Problema de crédito", n: 8 },
-    { motivo: "Entrega", n: 6 },
+    { motivo: "Prazo ou entrega", n: 6 },
   ],
   nao_atendidos: [
     { id: 1071, nome: "Poliana", carteira: 1, recuperacao: 10 },

@@ -399,7 +399,7 @@ export function ClientesDiaPage() {
       {motivoFor && (
         <MotivoModal
           title={motivoFor.status.label}
-          hint="Esse status exige um motivo escrito."
+          hint="Escolha um motivo da lista cadastrada pelo ADM."
           onCancel={() => setMotivoFor(null)}
           onConfirm={confirmMotivo}
         />

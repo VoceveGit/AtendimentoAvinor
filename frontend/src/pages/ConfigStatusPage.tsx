@@ -3,19 +3,24 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { COLOR_BADGE, COLOR_DOT, PALETTE } from "../lib/status";
-import type { Status } from "../lib/types";
+import type { Motivo, Status } from "../lib/types";
 import { cn } from "../lib/utils";
 
 export function ConfigStatusPage() {
   const [items, setItems] = useState<Status[]>([]);
+  const [motivos, setMotivos] = useState<Motivo[]>([]);
   const [label, setLabel] = useState("");
   const [color, setColor] = useState("amber");
   const [motivo, setMotivo] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [motivoLabel, setMotivoLabel] = useState("");
+  const [editingMotivo, setEditingMotivo] = useState<string | null>(null);
 
   const load = () => api<Status[]>("/api/statuses").then(setItems).catch((e: Error) => toast.error(e.message));
+  const loadMotivos = () => api<Motivo[]>("/api/motivos").then(setMotivos).catch((e: Error) => toast.error(e.message));
   useEffect(() => {
     load();
+    loadMotivos();
   }, []);
 
   const add = async () => {
@@ -65,6 +70,46 @@ export function ConfigStatusPage() {
         body: JSON.stringify({ label: s.label, color: s.color, requires_motivo: !s.requires_motivo }),
       });
       load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const saveMotivo = async () => {
+    if (!motivoLabel.trim()) return;
+    try {
+      if (editingMotivo) {
+        await api(`/api/motivos/${editingMotivo}`, { method: "PATCH", body: JSON.stringify({ label: motivoLabel }) });
+        toast.success("Motivo atualizado.");
+      } else {
+        await api("/api/motivos", { method: "POST", body: JSON.stringify({ label: motivoLabel }) });
+        toast.success("Motivo cadastrado.");
+      }
+      setMotivoLabel("");
+      setEditingMotivo(null);
+      loadMotivos();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const removeMotivo = async (id: string) => {
+    try {
+      await api(`/api/motivos/${id}`, { method: "DELETE" });
+      toast.success("Motivo removido.");
+      loadMotivos();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const toggleMotivoAtivo = async (m: Motivo) => {
+    try {
+      await api(`/api/motivos/${m.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ label: m.label, active: !m.active }),
+      });
+      loadMotivos();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -126,8 +171,8 @@ export function ConfigStatusPage() {
           <h3 className="font-display text-base font-semibold">Status cadastrados</h3>
           <p className="text-xs text-slate-400">
             O status marcado como <span className="font-semibold text-slate-600">Padrão</span> entra sozinho quando o
-            cliente é lançado no dia. <span className="font-semibold text-slate-600">Motivo</span> abre um campo
-            obrigatório (Não venda, Não recuperado). · {items.length} itens
+            cliente é lançado no dia. <span className="font-semibold text-slate-600">Motivo</span> abre a lista
+            cadastrada abaixo (Não venda, Não recuperado). · {items.length} itens
           </p>
         </div>
         <ul>
@@ -191,6 +236,81 @@ export function ConfigStatusPage() {
               </span>
             </li>
           ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-card">
+        <p className="mb-1 text-sm font-semibold text-slate-800">Motivos de não venda / não recuperado</p>
+        <p className="mb-3 text-xs text-slate-400">
+          A vendedora só escolhe da lista. Nada de texto livre. Esses motivos entram nos relatórios do ADM.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            value={motivoLabel}
+            onChange={(e) => setMotivoLabel(e.target.value)}
+            placeholder="Ex: Preço alto"
+            className="min-w-[240px] flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-avinor/40"
+          />
+          <button
+            type="button"
+            onClick={saveMotivo}
+            className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" /> {editingMotivo ? "Salvar motivo" : "Adicionar motivo"}
+          </button>
+          {editingMotivo && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMotivo(null);
+                setMotivoLabel("");
+              }}
+              className="text-sm font-bold text-slate-400"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
+      </section>
+      <section className="rounded-2xl border border-slate-100 bg-white p-2 shadow-card">
+        <div className="px-4 py-3">
+          <h3 className="font-display text-base font-semibold">Motivos cadastrados</h3>
+          <p className="text-xs text-slate-400">{motivos.length} itens · inativo some da lista da vendedora</p>
+        </div>
+        <ul>
+          {motivos.map((m) => (
+            <li key={m.id} className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-3">
+              <span className="font-semibold text-slate-800">{m.label}</span>
+              <span className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleMotivoAtivo(m)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] font-extrabold",
+                    m.active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400",
+                  )}
+                >
+                  {m.active !== false ? "Ativo" : "Inativo"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMotivo(m.id);
+                    setMotivoLabel(m.label);
+                  }}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => removeMotivo(m.id)} className="text-slate-400 hover:text-rose-600">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </span>
+            </li>
+          ))}
+          {motivos.length === 0 && (
+            <li className="px-4 py-6 text-center text-sm text-slate-400">Nenhum motivo ainda.</li>
+          )}
         </ul>
       </section>
     </div>

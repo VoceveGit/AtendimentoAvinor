@@ -97,6 +97,16 @@ class RecoveryAssignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Motivo(Base):
+    __tablename__ = "avinor_motivos"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Account(Base):
     __tablename__ = "avinor_accounts"
 
@@ -153,4 +163,15 @@ SEED_STATUSES = [
 ]
 
 DROPDOWN_HIDDEN = {"em_recuperacao", "finalizado"}
-CLOSE_KINDS = {"nao_venda", "nao_recuperado", "nao_atendido"}
+CLOSE_KINDS = {"nao_venda", "nao_recuperado", "nao_atendido", "recuperado"}
+
+SEED_MOTIVOS = [
+    ("preco_alto", "Preço alto", 1),
+    ("concorrente", "Comprou com o concorrente", 2),
+    ("sem_demanda", "Sem demanda no momento", 3),
+    ("credito", "Problema de crédito", 4),
+    ("fechou", "Mudou de ramo / fechou", 5),
+    ("entrega", "Prazo ou entrega", 6),
+    ("viajando", "Cliente viajando", 7),
+    ("estoque", "Estoque cheio", 8),
+]

@@ -7,7 +7,7 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
-from app.db.models import Base, DbConfig, SEED_STATUSES, Status
+from app.db.models import Base, DbConfig, Motivo, SEED_MOTIVOS, SEED_STATUSES, Status
 
 _engine = None
 _session = None
@@ -174,6 +174,11 @@ async def init_write_db() -> None:
                     updated_at=datetime.utcnow(),
                 )
             )
+        existing_motivos = list((await session.execute(select(Motivo))).scalars())
+        if not existing_motivos:
+            for mid, label, order in SEED_MOTIVOS:
+                session.add(Motivo(id=mid, label=label, sort_order=order, active=True))
+
         await session.commit()
 
     from app.services.accounts import seed_accounts

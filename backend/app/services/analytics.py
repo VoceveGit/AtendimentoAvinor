@@ -70,6 +70,9 @@ async def panel_analytics(
                 recuperados += 1
                 recuperado_valor += v
                 col["recuperados"] += 1
+        if r.kind == "recuperado":
+            recuperados += 1
+            col["recuperados"] = col.get("recuperados", 0) + 1
             for item in r.itens or []:
                 name = (item.get("descricao") or item.get("produto") or "Item").strip() or "Item"
                 products[name]["qtd"] += float(item.get("qtd") or 0)
@@ -93,7 +96,12 @@ async def panel_analytics(
 
     fluxo = len(today_ids) + len(rec_hoje)
     finalizados = by_kind.get("finalizado", 0)
-    encerrados = finalizados + by_kind.get("nao_venda", 0) + by_kind.get("nao_recuperado", 0)
+    encerrados = (
+        finalizados
+        + by_kind.get("nao_venda", 0)
+        + by_kind.get("nao_recuperado", 0)
+        + by_kind.get("recuperado", 0)
+    )
     conversao = round(100 * finalizados / encerrados, 1) if encerrados else 0.0
     ticket = round(valor / finalizados, 2) if finalizados else 0.0
     cobertura = len(clientes_venda)
@@ -185,6 +193,7 @@ async def panel_analytics(
             "ticket": ticket,
             "pedidos": finalizados,
             "recuperados": recuperados,
+            "cadastros": by_kind.get("recuperado", 0),
             "recuperado_valor": round(recuperado_valor, 2),
             "pool_recuperacao": len(rec_hoje),
             "cobertura": cobertura,

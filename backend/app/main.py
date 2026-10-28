@@ -20,6 +20,7 @@ from app.routes.imports import router as import_router
 from app.routes.prompt import router as prompt_router
 from app.routes.accounts import router as accounts_router
 from app.routes.statuses import router as statuses_router
+from app.routes.motivos import router as motivos_router
 from app.routes.ops import router as ops_router
 from app.routes.week import router as week_router
 
@@ -81,6 +82,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(clients_router)
 app.include_router(statuses_router)
+app.include_router(motivos_router)
 app.include_router(db_router)
 app.include_router(import_router)
 app.include_router(week_router)

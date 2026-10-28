@@ -5,7 +5,7 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import ClientStatus, DayClose
+from app.db.models import ClientStatus, DayClose, Motivo
 from app.services.clients import load_all_clients
 from app.services.pedidos import lookup_many, lookup_pedido
 from app.services.televendas import TEAM, scoped_seller_ids
@@ -89,6 +89,20 @@ async def finalize(
     return _dump(existing)
 
 
+async def _known_motivo(session: AsyncSession, motivo: str) -> str:
+    text = (motivo or "").strip()
+    if not text:
+        raise ValueError("Escolha um motivo da lista.")
+    rows = (await session.execute(select(Motivo).where(Motivo.active.is_(True)))).scalars().all()
+    if not rows:
+        return text
+    labels = {r.label.strip().lower(): r.label for r in rows}
+    hit = labels.get(text.lower())
+    if not hit:
+        raise ValueError("Escolha um motivo cadastrado. O ADM inclui novos em Configurar Status.")
+    return hit
+
+
 async def close_without_sale(
     session: AsyncSession,
     cliente_id: int,
@@ -98,10 +112,10 @@ async def close_without_sale(
     origem: str = "carteira",
     dia: date | None = None,
 ) -> dict:
-    if kind not in {"nao_venda", "nao_recuperado", "nao_atendido"}:
+    if kind not in {"nao_venda", "nao_recuperado", "nao_atendido", "recuperado"}:
         raise ValueError("Tipo de encerramento inválido.")
-    if kind != "nao_atendido" and not (motivo or "").strip():
-        raise ValueError("Informe o motivo.")
+    if kind in {"nao_venda", "nao_recuperado"}:
+        motivo = await _known_motivo(session, motivo)
     day = dia or date.today()
     sellers = scoped_seller_ids(user, None)
     vendedor_id = user.get("vendedor_id") if user.get("role") == "colaborador" else next(iter(sellers), 0)
@@ -121,7 +135,12 @@ async def close_without_sale(
         session.add(existing)
     existing.vendedor_id = int(vendedor_id or client.get("vendedor_id") or 0)
     existing.kind = kind
-    existing.motivo = (motivo or "").strip() or ("Não atendeu" if kind == "nao_atendido" else None)
+    if kind == "recuperado":
+        existing.motivo = (motivo or "").strip() or "Cadastro atualizado no ERP"
+        existing.codigo_pedido = None
+        existing.valor_total = None
+    else:
+        existing.motivo = (motivo or "").strip() or ("Não atendeu" if kind == "nao_atendido" else None)
     existing.cidade = client.get("cidade")
     existing.rota_id = client.get("rota_id")
     existing.rota_nome = client.get("rota_nome")
@@ -129,17 +148,15 @@ async def close_without_sale(
     existing.vendedor_nome = _team_name(existing.vendedor_id) or client.get("vendedor_nome")
     existing.created_by = user.get("login") or user.get("nome")
     existing.updated_at = datetime.utcnow()
-    await _touch_status(session, cliente_id, kind, user)
+    if kind != "recuperado":
+        await _touch_status(session, cliente_id, kind, user)
     await session.commit()
     await session.refresh(existing)
     return _dump(existing)
 
 
 def _dump(row: DayClose) -> dict:
-    situacao = "Recuperado" if row.origem == "recuperacao" and row.kind == "finalizado" else (
-        "Da carteira" if row.origem == "carteira" else "Recuperação"
-    )
-    if row.origem == "recuperacao" and row.kind == "finalizado":
+    if row.origem == "recuperacao" and row.kind in {"finalizado", "recuperado"}:
         situacao = "Recuperado"
     elif row.origem == "recuperacao":
         situacao = "Recuperação"
