@@ -15,6 +15,7 @@ export function ConfigStatusPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [motivoLabel, setMotivoLabel] = useState("");
   const [editingMotivo, setEditingMotivo] = useState<string | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const load = () => api<Status[]>("/api/statuses").then(setItems).catch((e: Error) => toast.error(e.message));
   const loadMotivos = () => api<Motivo[]>("/api/motivos").then(setMotivos).catch((e: Error) => toast.error(e.message));
@@ -115,6 +116,33 @@ export function ConfigStatusPage() {
     }
   };
 
+  const customStatuses = items.filter((s) => !s.is_automatic && !s.is_system);
+  const autoStatuses = items.filter((s) => s.is_automatic || s.is_system);
+
+  const dropCustom = async (overId: string) => {
+    if (!dragId || dragId === overId) {
+      setDragId(null);
+      return;
+    }
+    const next = [...customStatuses];
+    const from = next.findIndex((s) => s.id === dragId);
+    const to = next.findIndex((s) => s.id === overId);
+    if (from < 0 || to < 0) {
+      setDragId(null);
+      return;
+    }
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setItems([...next, ...autoStatuses]);
+    setDragId(null);
+    try {
+      await api("/api/statuses/reorder", { method: "POST", body: JSON.stringify({ ids: next.map((s) => s.id) }) });
+    } catch (e) {
+      toast.error((e as Error).message);
+      load();
+    }
+  };
+
   const setDefault = async (id: string) => {
     try {
       await api(`/api/statuses/${id}/default`, { method: "POST" });
@@ -170,51 +198,55 @@ export function ConfigStatusPage() {
         <div className="px-4 py-3">
           <h3 className="font-display text-base font-semibold">Status cadastrados</h3>
           <p className="text-xs text-slate-400">
-            O status marcado como <span className="font-semibold text-slate-600">Padrão</span> entra sozinho quando o
-            cliente é lançado no dia. <span className="font-semibold text-slate-600">Motivo</span> abre a lista
-            cadastrada abaixo (Não venda, Não recuperado). · {items.length} itens
+            Arraste para definir a ordem do droplist no atendimento. Padrão entra sozinho no cliente do dia. · {customStatuses.length} itens
           </p>
         </div>
         <ul>
-          {items.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-3">
-              <GripVertical className="h-4 w-4 text-slate-300" />
+          {customStatuses.map((s) => (
+            <li
+              key={s.id}
+              draggable
+              onDragStart={() => setDragId(s.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => dropCustom(s.id)}
+              className={cn(
+                "flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-3",
+                dragId === s.id && "bg-slate-50",
+              )}
+            >
+              <GripVertical className="h-4 w-4 cursor-grab text-slate-400" />
               <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1", COLOR_BADGE[s.color] || COLOR_BADGE.slate)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", COLOR_DOT[s.color])} />
                 {s.label}
               </span>
               <span className="font-mono text-[11px] text-slate-400">id: {s.id}</span>
               <span className="ml-auto flex items-center gap-2">
-                {!s.is_system && (
-                  <button
-                    type="button"
-                    onClick={() => toggleMotivo(s)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold",
-                      s.requires_motivo
-                        ? "bg-amber-500 text-white"
-                        : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50",
-                    )}
-                  >
-                    <MessageSquareWarning className="h-3 w-3" />
-                    Motivo
-                  </button>
-                )}
-                {!s.is_system && s.id !== "em_recuperacao" && (
-                  <button
-                    type="button"
-                    onClick={() => setDefault(s.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold",
-                      s.is_default
-                        ? "bg-avinor text-white"
-                        : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50",
-                    )}
-                  >
-                    {s.is_default && <Check className="h-3 w-3" />}
-                    Padrão
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => toggleMotivo(s)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold",
+                    s.requires_motivo
+                      ? "bg-amber-500 text-white"
+                      : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50",
+                  )}
+                >
+                  <MessageSquareWarning className="h-3 w-3" />
+                  Motivo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDefault(s.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold",
+                    s.is_default
+                      ? "bg-avinor text-white"
+                      : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50",
+                  )}
+                >
+                  {s.is_default && <Check className="h-3 w-3" />}
+                  Padrão
+                </button>
                 {PALETTE.map((c) => (
                   <button key={c} type="button" onClick={() => setColorNow(s.id, c)} className={cn("h-4 w-4 rounded-full", COLOR_DOT[c], s.color === c && "ring-2 ring-offset-1 ring-slate-400")} />
                 ))}
@@ -236,6 +268,37 @@ export function ConfigStatusPage() {
               </span>
             </li>
           ))}
+        </ul>
+      </section>
+
+      <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-2">
+        <div className="px-4 py-3">
+          <h3 className="font-display text-base font-semibold text-slate-700">Status automáticos</h3>
+          <p className="text-xs text-slate-400">
+            Não se cadastra. O sistema aplica depois de uma ação: agendar data, finalizar venda, recuperação.
+          </p>
+        </div>
+        <ul>
+          {autoStatuses
+            .filter((s) => ["agendado", "finalizado", "atendido", "em_recuperacao"].includes(s.id))
+            .map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-3">
+                <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1", COLOR_BADGE[s.color] || COLOR_BADGE.slate)}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full", COLOR_DOT[s.color])} />
+                  {s.label}
+                </span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-400 ring-1 ring-slate-200">
+                  automático
+                </span>
+                <span className="text-xs text-slate-400">
+                  {s.id === "agendado"
+                    ? "Ao escolher a data de atendimento"
+                    : s.id === "finalizado" || s.id === "atendido"
+                      ? "Ao clicar em Finalizar e registrar o pedido"
+                      : "Cliente parado na recuperação"}
+                </span>
+              </li>
+            ))}
         </ul>
       </section>
 

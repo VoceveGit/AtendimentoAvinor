@@ -1,4 +1,4 @@
-import { CheckCircle2, MapPin, Phone, PhoneOff, Search, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, MapPin, Phone, PhoneOff, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Busy } from "../components/Busy";
@@ -11,7 +11,7 @@ import { useAuth } from "../lib/auth";
 import { useDemo } from "../lib/demo";
 import { MOCK_RECOVERY } from "../lib/mockData";
 import type { Client, Colaboradora } from "../lib/types";
-import { cn, formatMoney, formatPhone } from "../lib/utils";
+import { cn, formatDate, formatMoney, formatPhone } from "../lib/utils";
 
 const GIRL_BY_ID: Record<number, string> = { 1071: "Poliana", 1072: "Fernanda", 1073: "Karolline" };
 
@@ -67,6 +67,7 @@ export function RecuperacaoPage() {
   const [motivoFor, setMotivoFor] = useState<Client | null>(null);
   const [loading, setLoading] = useState(!mock);
   const [hintId, setHintId] = useState<number | null>(null);
+  const [scheduleFor, setScheduleFor] = useState<Client | null>(null);
   const seq = useRef(0);
 
   const scopeId = role === "colaborador" ? user?.vendedor_id ?? null : vendedor === "todas" ? null : Number(vendedor);
@@ -122,6 +123,31 @@ export function RecuperacaoPage() {
     }
     load();
   }, [q, vendedor, mock, scopeId, closes]);
+
+  const agendar = async (c: Client, dia: string) => {
+    if (!dia) return;
+    if (mock) {
+      toast.success(`Agendado para ${formatDate(dia)} — só na demonstração. Entra em Clientes do Dia nesse dia.`);
+      setScheduleFor(null);
+      return;
+    }
+    try {
+      await api(`/api/clients/${c.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status_id: "agendado",
+          data_atendimento: dia,
+          origem: "recuperacao",
+          vendedor_id: c.assigned_vendedor_id || scopeId,
+        }),
+      });
+      toast.success(`Agendado para ${formatDate(dia)}. Sai da recuperação e entra em Clientes do Dia nesse dia, com fundo vermelho.`);
+      setScheduleFor(null);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   const markNaoAtend = async (c: Client) => {
     if (mock) {
@@ -322,6 +348,14 @@ export function RecuperacaoPage() {
                         <PhoneOff className="h-3 w-3" />
                         N/atend.
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setScheduleFor(c)}
+                        className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-extrabold text-violet-700 hover:bg-violet-100"
+                      >
+                        <CalendarDays className="h-3 w-3" />
+                        Agendar
+                      </button>
                     </div>
                   )}
                 </li>
@@ -369,6 +403,30 @@ export function RecuperacaoPage() {
           onCancel={() => setMotivoFor(null)}
           onConfirm={confirmMotivo}
         />
+      )}
+      {scheduleFor && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-lift">
+            <h3 className="font-display text-lg font-extrabold text-slate-900">Agendar recuperação</h3>
+            <p className="mt-1 text-sm text-slate-500">{scheduleFor.nome}</p>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              Ele sai desta fila e, no dia marcado, entra em Clientes do Dia com fundo vermelho pastel — alvo, não “vamos ver”.
+            </p>
+            <label className="mt-4 block text-xs font-extrabold uppercase tracking-wide text-slate-400">Data</label>
+            <input
+              type="date"
+              className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-avinor/40"
+              onChange={(e) => {
+                if (e.target.value) agendar(scheduleFor, e.target.value);
+              }}
+            />
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => setScheduleFor(null)} className="rounded-xl px-3 py-2 text-sm font-bold text-slate-500">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

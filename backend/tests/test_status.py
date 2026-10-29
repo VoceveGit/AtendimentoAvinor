@@ -20,6 +20,10 @@ async def test_list_and_create_status():
         ids = {s["id"] for s in listed.json()}
         assert "em_atendimento" in ids
         assert "em_recuperacao" in ids
+        assert "agendado" in ids
+        autos = {s["id"] for s in listed.json() if s.get("is_automatic") or s.get("is_system")}
+        assert "agendado" in autos
+        assert "finalizado" in autos
         if "atendimento_hoje" in ids:
             await client.post("/api/statuses/atendimento_hoje/default")
 
@@ -60,10 +64,8 @@ async def test_deleted_status_does_not_come_back_on_boot():
         assert sid not in ids
         assert "atendimento_hoje" in ids
 
-        seed_id = "visita_marcada" if "visita_marcada" in ids else next(
-            (i for i in ids if i not in {"em_recuperacao", "finalizado", "atendimento_hoje"}),
-            None,
-        )
+        protected = {"em_recuperacao", "finalizado", "atendido", "agendado", "atendimento_hoje", "em_atendimento"}
+        seed_id = next((i for i in ids if i not in protected), None)
         if seed_id:
             gone = await client.delete(f"/api/statuses/{seed_id}")
             assert gone.status_code == 200

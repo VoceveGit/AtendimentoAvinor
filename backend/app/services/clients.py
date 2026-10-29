@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db.models import ClientStatus, ExtraAttendance, Status
+from app.db.models import AUTO_STATUS_IDS, ClientStatus, ExtraAttendance, Status
 from app.db.mysql import fetch_all
 from app.services.normalize import as_float, as_int, as_str, pick
 from app.services.routes_sheet import catalog, resolve_route, routes_for_day
@@ -255,7 +255,7 @@ async def _status_maps(session: AsyncSession) -> tuple[dict, dict]:
 
 def _default_status_id(status_by_id: dict) -> str | None:
     for sid, meta in status_by_id.items():
-        if meta.get("is_default") and sid != "em_recuperacao":
+        if meta.get("is_default") and sid not in AUTO_STATUS_IDS:
             return sid
     if "atendimento_hoje" in status_by_id:
         return "atendimento_hoje"
@@ -272,6 +272,8 @@ def _hydrate(
     days = agg.get("dias_sem_contato")
     derived_recovery = days is not None and days > RECOVERY_DAYS
     status_id = cs.status_id if cs else None
+    if cs and _pending_schedule(cs):
+        status_id = "agendado"
     if derived_recovery and (not status_id or status_id == "em_recuperacao"):
         status_id = "em_recuperacao"
     if not derived_recovery and status_id == "em_recuperacao":
@@ -308,9 +310,124 @@ def _schedule_date(cs: ClientStatus | None) -> date | None:
 
 
 def _pending_schedule(cs: ClientStatus | None) -> bool:
-    if not cs or (cs.status_id or "") == "atendido":
+    if not cs or (cs.status_id or "") in {"atendido", "finalizado"}:
         return False
     return _schedule_date(cs) is not None
+
+
+def _mine_agenda(cs: ClientStatus | None, in_carteira: bool, sellers: frozenset[int]) -> bool:
+    if not _pending_schedule(cs):
+        return False
+    vid = getattr(cs, "agenda_vendedor_id", None)
+    if vid is not None:
+        return vid in sellers
+    return in_carteira
+
+
+async def _upsert_extra(session: AsyncSession, cliente_id: int, day: date, vendedor_id: int, user: dict) -> None:
+    existing = (
+        await session.execute(
+            select(ExtraAttendance).where(
+                ExtraAttendance.cliente_id == cliente_id,
+                ExtraAttendance.dia == day,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        session.add(
+            ExtraAttendance(
+                cliente_id=cliente_id,
+                dia=day,
+                vendedor_id=int(vendedor_id),
+                added_by=user.get("login") or user.get("nome"),
+            )
+        )
+        return
+    existing.vendedor_id = int(vendedor_id)
+
+
+async def apply_schedule(
+    session: AsyncSession,
+    cliente_id: int,
+    user: dict,
+    when: date,
+    origem: str = "carteira",
+    vendedor_id: int | None = None,
+) -> dict:
+    sellers = scoped_seller_ids(user, None)
+    if user.get("role") == "colaborador":
+        vendedor_id = user.get("vendedor_id")
+    elif not vendedor_id:
+        vendedor_id = next(iter(sellers), 0)
+    row = await session.get(ClientStatus, cliente_id)
+    if row is None:
+        row = ClientStatus(cliente_id=cliente_id)
+        session.add(row)
+    old_day = _schedule_date(row)
+    if old_day and old_day != when:
+        old_extra = (
+            await session.execute(
+                select(ExtraAttendance).where(
+                    ExtraAttendance.cliente_id == cliente_id,
+                    ExtraAttendance.dia == old_day,
+                )
+            )
+        ).scalar_one_or_none()
+        if old_extra:
+            await session.delete(old_extra)
+    row.status_id = "agendado"
+    row.data_atendimento = when
+    row.agenda_origem = origem if origem in {"carteira", "recuperacao"} else "carteira"
+    row.agenda_vendedor_id = int(vendedor_id or 0) or None
+    row.updated_by = user.get("login") or user.get("nome")
+    row.updated_at = datetime.utcnow()
+    await _upsert_extra(session, cliente_id, when, int(vendedor_id or 0), user)
+    await session.commit()
+    await session.refresh(row)
+    return {
+        "cliente_id": row.cliente_id,
+        "status_id": row.status_id,
+        "data_atendimento": row.data_atendimento.isoformat() if row.data_atendimento else None,
+        "agenda_origem": row.agenda_origem,
+    }
+
+
+async def clear_schedule(session: AsyncSession, cliente_id: int, user: dict) -> dict:
+    row = await session.get(ClientStatus, cliente_id)
+    if row is None:
+        raise ValueError("Esse cliente não tem agendamento.")
+    day = _schedule_date(row)
+    if day:
+        extra = (
+            await session.execute(
+                select(ExtraAttendance).where(
+                    ExtraAttendance.cliente_id == cliente_id,
+                    ExtraAttendance.dia == day,
+                )
+            )
+        ).scalar_one_or_none()
+        if extra:
+            await session.delete(extra)
+    was_recovery = (row.agenda_origem or "") == "recuperacao"
+    row.data_atendimento = None
+    row.agenda_origem = None
+    row.agenda_vendedor_id = None
+    if was_recovery:
+        row.status_id = None
+    else:
+        statuses = (await session.execute(select(Status))).scalars().all()
+        default = next((s.id for s in statuses if s.is_default and s.id not in AUTO_STATUS_IDS), None)
+        row.status_id = default or "atendimento_hoje"
+    row.updated_by = user.get("login") or user.get("nome")
+    row.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(row)
+    return {
+        "cliente_id": row.cliente_id,
+        "status_id": row.status_id,
+        "data_atendimento": None,
+        "agenda_origem": None,
+    }
 
 
 def _sort_today(items: list[dict]) -> list[dict]:
@@ -421,21 +538,27 @@ async def clients_today(
     carteira = 0
     agendados = 0
     for c in clients:
-        if c.get("vendedor_id") not in sellers:
-            continue
-        carteira += 1
-        cs = by_cs.get(c["id"])
-        extra = c["id"] in extras
-        on_route = c.get("rota_id") in route_ids
+        cid = c.get("id")
+        cs = by_cs.get(cid)
+        in_carteira = c.get("vendedor_id") in sellers
+        extra = cid in extras
         pending = _pending_schedule(cs)
-        scheduled_today = pending and _schedule_date(cs) == day
-        if pending:
+        sched_day = _schedule_date(cs)
+        scheduled_today = pending and sched_day == day
+        mine_agenda = _mine_agenda(cs, in_carteira, sellers)
+        on_route = in_carteira and c.get("rota_id") in route_ids
+        if in_carteira:
+            carteira += 1
+        if mine_agenda:
             agendados += 1
         if looking_agendados:
-            if not pending:
+            if not mine_agenda:
                 continue
-        elif not on_route and not extra and not scheduled_today:
-            continue
+        else:
+            if mine_agenda and sched_day is not None and sched_day != day:
+                continue
+            if not on_route and not extra and not (scheduled_today and mine_agenda):
+                continue
         if (
             rota_id
             and rota_id not in {"", "todas"}
@@ -445,7 +568,7 @@ async def clients_today(
             and not looking_agendados
         ):
             continue
-        metrics = agg.get(c["id"]) or {}
+        metrics = agg.get(cid) or {}
         if (
             not looking_agendados
             and on_route
@@ -456,10 +579,13 @@ async def clients_today(
             continue
         if not _match_query(c, q):
             continue
+        origem = "recuperacao" if cs and getattr(cs, "agenda_origem", None) == "recuperacao" else "carteira"
         item = _hydrate(c, metrics, status_by_id, cs, apply_default=not pending)
         item["extra_hoje"] = extra and not on_route and not scheduled_today
-        item["agendado_hoje"] = scheduled_today
-        item["origem"] = "carteira"
+        item["agendado_hoje"] = bool(scheduled_today and mine_agenda)
+        item["origem"] = origem
+        if cs and getattr(cs, "agenda_vendedor_id", None):
+            item["assigned_vendedor_id"] = cs.agenda_vendedor_id
         items.append(item)
 
     if status_id and status_id not in {"", "todos", "agendados", "sem_status"}:
@@ -555,7 +681,7 @@ async def dashboard(
         total = len(today_items) or 1
         bars = []
         for s in statuses:
-            if s.id in {"em_recuperacao", "finalizado"}:
+            if s.id in AUTO_STATUS_IDS:
                 continue
             n = counts.get(s.id, 0)
             bars.append(

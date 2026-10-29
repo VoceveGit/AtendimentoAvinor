@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Status
+from app.db.models import AUTO_STATUS_IDS, Status
 from app.db.write import get_session
 from app.services.normalize import norm_key
 
@@ -35,7 +35,8 @@ async def list_statuses(session: AsyncSession = Depends(get_session)):
             "label": r.label,
             "color": r.color,
             "order": r.sort_order,
-            "is_system": r.is_system,
+            "is_system": bool(r.is_system) or r.id in AUTO_STATUS_IDS,
+            "is_automatic": bool(r.is_system) or r.id in AUTO_STATUS_IDS,
             "is_default": bool(r.is_default),
             "requires_motivo": bool(r.requires_motivo),
         }

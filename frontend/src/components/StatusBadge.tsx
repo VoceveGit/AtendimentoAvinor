@@ -5,36 +5,75 @@ import { COLOR_BADGE, COLOR_DOT } from "../lib/status";
 import type { Status } from "../lib/types";
 import { cn } from "../lib/utils";
 
+export const AUTO_STATUS_IDS = new Set([
+  "agendado",
+  "finalizado",
+  "atendido",
+  "em_recuperacao",
+  "visita_marcada",
+  "remarcado",
+  "sem_status",
+]);
+
+type Extra = { data_atendimento?: string; clear_agenda?: boolean; origem?: "carteira" | "recuperacao" };
+
 type Props = {
   status?: Status | null;
   statuses: Status[];
   origem?: "carteira" | "recuperacao";
-  onChange: (statusId: string, extra?: { data_atendimento?: string }) => void;
+  dataAtendimento?: string | null;
+  onChange: (statusId: string, extra?: Extra) => void;
   onNeedMotivo?: (status: Status) => void;
 };
 
 export function pickerStatuses(statuses: Status[], origem: "carteira" | "recuperacao" = "carteira") {
   return statuses.filter((s) => {
-    if (s.id === "em_recuperacao" || s.id === "finalizado" || s.id === "sem_status") return false;
+    if (s.is_automatic || s.is_system || AUTO_STATUS_IDS.has(s.id)) return false;
     if (origem !== "recuperacao" && s.id === "nao_recuperado") return false;
     if (origem === "recuperacao" && s.id === "nao_venda") return false;
     return true;
   });
 }
 
-export function shownStatus(status: Status | null | undefined, statuses: Status[]) {
+export function shownStatus(
+  status: Status | null | undefined,
+  statuses: Status[],
+  dataAtendimento?: string | null,
+) {
+  if (dataAtendimento && !["finalizado", "atendido"].includes(status?.id || "")) {
+    return (
+      statuses.find((s) => s.id === "agendado") || {
+        id: "agendado",
+        label: "Agendado",
+        color: "purple",
+        is_automatic: true,
+      }
+    );
+  }
+  if (status?.id === "finalizado" || status?.id === "atendido") {
+    return status;
+  }
+  if (status?.id && status.id !== "sem_status" && !AUTO_STATUS_IDS.has(status.id)) return status;
   if (status?.id && status.id !== "sem_status") return status;
-  return statuses.find((s) => s.is_default && s.id !== "em_recuperacao") || statuses.find((s) => s.id === "atendimento_hoje") || null;
+  return statuses.find((s) => s.is_default && !s.is_automatic) || statuses.find((s) => s.id === "atendimento_hoje") || null;
 }
 
-export function StatusBadge({ status, statuses, origem = "carteira", onChange, onNeedMotivo }: Props) {
+export function StatusBadge({
+  status,
+  statuses,
+  origem = "carteira",
+  dataAtendimento,
+  onChange,
+  onNeedMotivo,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [pickingDate, setPickingDate] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const shown = shownStatus(status, statuses);
+  const shown = shownStatus(status, statuses, dataAtendimento);
   const color = shown?.color || "slate";
+  const isAgendado = Boolean(dataAtendimento) && !["finalizado", "atendido"].includes(status?.id || "");
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -124,33 +163,41 @@ export function StatusBadge({ status, statuses, origem = "carteira", onChange, o
                 {s.label}
               </button>
             ))}
-            {origem === "carteira" && (
-              <>
-                <div className="my-1 border-t border-slate-100" />
-                {pickingDate ? (
-                  <div className="px-3 py-1">
-                    <input
-                      type="date"
-                      className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        onChange("visita_marcada", { data_atendimento: e.target.value });
-                        setOpen(false);
-                        setPickingDate(false);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setPickingDate(true)}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-50"
-                  >
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    Definir data de atendimento
-                  </button>
-                )}
-              </>
+            <div className="my-1 border-t border-slate-100" />
+            {pickingDate ? (
+              <div className="px-3 py-1">
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    onChange("agendado", { data_atendimento: e.target.value, origem });
+                    setOpen(false);
+                    setPickingDate(false);
+                  }}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPickingDate(true)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-50"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                Definir data de atendimento
+              </button>
+            )}
+            {isAgendado && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("agendado", { clear_agenda: true, origem });
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"
+              >
+                Tirar agendamento
+              </button>
             )}
           </div>,
           document.body,
@@ -159,9 +206,9 @@ export function StatusBadge({ status, statuses, origem = "carteira", onChange, o
   );
 }
 
-export function StatusPicker({ status, statuses, origem = "carteira", onChange, onNeedMotivo }: Props) {
+export function StatusPicker({ status, statuses, origem = "carteira", dataAtendimento, onChange, onNeedMotivo }: Props) {
   const visible = pickerStatuses(statuses, origem);
-  const current = shownStatus(status, statuses)?.id;
+  const current = shownStatus(status, statuses, dataAtendimento)?.id;
   return (
     <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
       {visible.map((s) => {

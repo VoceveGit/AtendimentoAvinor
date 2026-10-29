@@ -41,6 +41,8 @@ class ClientStatus(Base):
     updated_by: Mapped[str | None] = mapped_column(String(40), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     recontato: Mapped[bool] = mapped_column(Boolean, default=False)
+    agenda_origem: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    agenda_vendedor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ImportLog(Base):
@@ -153,16 +155,16 @@ class DayClose(Base):
 SEED_STATUSES = [
     ("em_atendimento", "Em Atendimento", "amber", 1, False, False),
     ("atendimento_hoje", "Atendimento Hoje", "blue", 2, False, False),
-    ("visita_marcada", "Visita Marcada", "purple", 3, False, False),
-    ("remarcado", "Remarcado", "orange", 4, False, False),
-    ("nao_venda", "Não venda", "slate", 5, False, True),
-    ("nao_recuperado", "Não recuperado", "rose", 6, False, True),
-    ("finalizado", "Finalizado", "emerald", 7, True, False),
-    ("atendido", "Atendido / Concluído", "emerald", 8, False, False),
-    ("em_recuperacao", "Em Recuperação (90+ dias)", "rose", 9, True, False),
+    ("nao_venda", "Não venda", "slate", 3, False, True),
+    ("nao_recuperado", "Não recuperado", "rose", 4, False, True),
+    ("agendado", "Agendado", "purple", 90, True, False),
+    ("finalizado", "Finalizado", "emerald", 91, True, False),
+    ("atendido", "Atendido / Concluído", "emerald", 92, True, False),
+    ("em_recuperacao", "Em Recuperação", "rose", 93, True, False),
 ]
 
-DROPDOWN_HIDDEN = {"em_recuperacao", "finalizado"}
+AUTO_STATUS_IDS = frozenset({"agendado", "finalizado", "atendido", "em_recuperacao", "visita_marcada", "remarcado"})
+DROPDOWN_HIDDEN = AUTO_STATUS_IDS | {"sem_status"}
 CLOSE_KINDS = {"nao_venda", "nao_recuperado", "nao_atendido", "recuperado"}
 
 SEED_MOTIVOS = [

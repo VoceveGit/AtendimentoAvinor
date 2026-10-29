@@ -7,7 +7,7 @@ import { CollaboratorFilter } from "../components/CollaboratorFilter";
 import { FinalizeModal } from "../components/FinalizeModal";
 import { MotivoModal } from "../components/MotivoModal";
 import { NovoAtendimento } from "../components/NovoAtendimento";
-import { StatusBadge, StatusPicker } from "../components/StatusBadge";
+import { AUTO_STATUS_IDS, StatusBadge, StatusPicker } from "../components/StatusBadge";
 import { Streak } from "../components/Streak";
 import { TablePager } from "../components/TablePager";
 import { api } from "../lib/api";
@@ -119,24 +119,40 @@ export function ClientesDiaPage() {
     });
   };
 
-  const changeStatus = async (id: number, status_id: string, extra?: { data_atendimento?: string }) => {
+  const changeStatus = async (
+    id: number,
+    status_id: string,
+    extra?: { data_atendimento?: string; clear_agenda?: boolean; origem?: "carteira" | "recuperacao" },
+  ) => {
     try {
-      await api(`/api/clients/${id}/status`, {
+      const body: Record<string, unknown> = { updated_by: role, origem: extra?.origem || "carteira" };
+      if (extra?.clear_agenda) body.clear_agenda = true;
+      else if (extra?.data_atendimento) {
+        body.status_id = "agendado";
+        body.data_atendimento = extra.data_atendimento;
+      } else {
+        body.status_id = status_id;
+      }
+      const saved = await api<{ status_id?: string; data_atendimento?: string | null }>(`/api/clients/${id}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status_id, updated_by: role, ...extra }),
+        body: JSON.stringify(body),
       });
-      if (extra?.data_atendimento) {
-        toast.success(`Agendado para ${formatDate(extra.data_atendimento)}. Fica na aba Agendados e entra no dia marcado.`);
+      if (extra?.clear_agenda) toast.success("Agendamento removido.");
+      else if (extra?.data_atendimento) {
+        toast.success(`Agendado para ${formatDate(extra.data_atendimento)}. Entra no dia marcado, com cor de fundo.`);
       } else {
         toast.success("Status atualizado.");
       }
-      const meta = statuses.find((s) => s.id === status_id) || null;
+      const sid = saved.status_id || status_id;
+      const meta = statuses.find((s) => s.id === sid) || null;
       patchClient(id, {
-        status_id,
+        status_id: sid,
         status: meta,
-        data_atendimento: extra?.data_atendimento ?? undefined,
-        agendado_hoje: extra?.data_atendimento ? extra.data_atendimento.slice(0, 10) === (data?.date || "") : undefined,
+        data_atendimento: extra?.clear_agenda ? null : extra?.data_atendimento ?? undefined,
+        agendado_hoje: extra?.data_atendimento ? extra.data_atendimento.slice(0, 10) === (data?.date || "") : false,
+        origem: extra?.origem || undefined,
       });
+      if (extra?.clear_agenda || extra?.data_atendimento) load();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -164,7 +180,7 @@ export function ClientesDiaPage() {
     }
   };
 
-  const statusPills = statuses.filter((s) => !["em_recuperacao", "finalizado", "nao_recuperado", "sem_status"].includes(s.id));
+  const statusPills = statuses.filter((s) => !s.is_automatic && !s.is_system && !AUTO_STATUS_IDS.has(s.id) && s.id !== "nao_recuperado");
   const toggleOpen = (id: number) => {
     setOpen((cur) => {
       const next = new Set(cur);
@@ -284,8 +300,16 @@ export function ClientesDiaPage() {
                   <Fragment key={c.id}>
                     <tr
                       className={cn(
-                        "cursor-pointer border-t border-slate-100 transition hover:bg-orange-50/60",
-                        expanded && "bg-orange-50/80",
+                        "cursor-pointer border-t border-slate-100 transition",
+                        c.status_id === "finalizado" || c.status_id === "atendido" || c.close_kind === "finalizado"
+                          ? "bg-emerald-50/80 hover:bg-emerald-50"
+                          : c.agendado_hoje && c.origem === "recuperacao"
+                            ? "bg-rose-50/80 hover:bg-rose-50"
+                            : c.agendado_hoje
+                              ? "bg-violet-50/80 hover:bg-violet-50"
+                              : expanded
+                                ? "bg-orange-50/80"
+                                : "hover:bg-orange-50/60",
                       )}
                       onClick={() => toggleOpen(c.id)}
                     >
@@ -303,10 +327,16 @@ export function ClientesDiaPage() {
                                   Fora da rota
                                 </span>
                               )}
-                              {c.data_atendimento && c.status_id !== "atendido" && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-extrabold text-violet-700">
+                              {c.data_atendimento && c.status_id !== "atendido" && c.status_id !== "finalizado" && (
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-extrabold",
+                                    c.origem === "recuperacao" ? "bg-rose-100 text-rose-700" : "bg-violet-100 text-violet-700",
+                                  )}
+                                >
                                   <CalendarDays className="h-3 w-3" />
-                                  {c.agendado_hoje ? "Agendado hoje" : `Agendado · ${formatDate(c.data_atendimento)}`}
+                                  {c.origem === "recuperacao" ? "Recuperação agendada" : "Carteira agendada"}
+                                  {c.agendado_hoje ? " · hoje" : ` · ${formatDate(c.data_atendimento)}`}
                                 </span>
                               )}
                             </div>
@@ -340,7 +370,8 @@ export function ClientesDiaPage() {
                         <StatusBadge
                           status={c.status}
                           statuses={statuses}
-                          origem="carteira"
+                          origem={c.origem === "recuperacao" ? "recuperacao" : "carteira"}
+                          dataAtendimento={c.data_atendimento}
                           onChange={(sid, extra) => changeStatus(c.id, sid, extra)}
                           onNeedMotivo={(s) => setMotivoFor({ client: c, status: s })}
                         />
@@ -417,7 +448,7 @@ function ClientExpand({
 }: {
   client: Client;
   statuses: Status[];
-  onStatus: (statusId: string, extra?: { data_atendimento?: string }) => void;
+  onStatus: (statusId: string, extra?: { data_atendimento?: string; clear_agenda?: boolean; origem?: "carteira" | "recuperacao" }) => void;
   onNeedMotivo: (status: Status) => void;
   onFinalize: () => void;
 }) {
@@ -453,7 +484,8 @@ function ClientExpand({
             <StatusPicker
               status={client.status}
               statuses={statuses}
-              origem="carteira"
+              origem={client.origem === "recuperacao" ? "recuperacao" : "carteira"}
+              dataAtendimento={client.data_atendimento}
               onChange={onStatus}
               onNeedMotivo={onNeedMotivo}
             />

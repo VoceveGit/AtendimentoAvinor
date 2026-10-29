@@ -7,7 +7,7 @@ from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
-from app.db.models import Base, DbConfig, Motivo, SEED_MOTIVOS, SEED_STATUSES, Status
+from app.db.models import AUTO_STATUS_IDS, Base, DbConfig, Motivo, SEED_MOTIVOS, SEED_STATUSES, Status
 
 _engine = None
 _session = None
@@ -101,13 +101,19 @@ async def get_session() -> AsyncSession:
 
 def _ensure_status_columns(sync_conn) -> None:
     insp = inspect(sync_conn)
-    if "avinor_statuses" not in insp.get_table_names():
-        return
-    cols = {c["name"] for c in insp.get_columns("avinor_statuses")}
-    if "is_default" not in cols:
-        sync_conn.execute(text("ALTER TABLE avinor_statuses ADD COLUMN is_default BOOLEAN DEFAULT 0"))
-    if "requires_motivo" not in cols:
-        sync_conn.execute(text("ALTER TABLE avinor_statuses ADD COLUMN requires_motivo BOOLEAN DEFAULT 0"))
+    tables = insp.get_table_names()
+    if "avinor_statuses" in tables:
+        cols = {c["name"] for c in insp.get_columns("avinor_statuses")}
+        if "is_default" not in cols:
+            sync_conn.execute(text("ALTER TABLE avinor_statuses ADD COLUMN is_default BOOLEAN DEFAULT 0"))
+        if "requires_motivo" not in cols:
+            sync_conn.execute(text("ALTER TABLE avinor_statuses ADD COLUMN requires_motivo BOOLEAN DEFAULT 0"))
+    if "avinor_client_status" in tables:
+        cs = {c["name"] for c in insp.get_columns("avinor_client_status")}
+        if "agenda_origem" not in cs:
+            sync_conn.execute(text("ALTER TABLE avinor_client_status ADD COLUMN agenda_origem VARCHAR(20)"))
+        if "agenda_vendedor_id" not in cs:
+            sync_conn.execute(text("ALTER TABLE avinor_client_status ADD COLUMN agenda_vendedor_id INTEGER"))
 
 
 async def init_write_db() -> None:
@@ -131,6 +137,28 @@ async def init_write_db() -> None:
                         requires_motivo=requires_motivo,
                     )
                 )
+        for sid, label, color, order, system, requires_motivo in SEED_STATUSES:
+            if sid not in AUTO_STATUS_IDS:
+                continue
+            row = await session.get(Status, sid)
+            if row is None:
+                session.add(
+                    Status(
+                        id=sid,
+                        label=label,
+                        color=color,
+                        sort_order=order,
+                        is_system=True,
+                        requires_motivo=requires_motivo,
+                    )
+                )
+            else:
+                row.is_system = True
+        for leftover in ("visita_marcada", "remarcado"):
+            old = await session.get(Status, leftover)
+            if old:
+                old.is_system = True
+
         has_default = any(row.is_default for row in (await session.execute(select(Status))).scalars())
         if not has_default:
             seeded = await session.get(Status, "atendimento_hoje")

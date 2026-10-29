@@ -10,6 +10,7 @@ from app.db.models import DayClose, RecoveryAssignment
 from app.services.clients import (
     _hydrate,
     _match_query,
+    _pending_schedule,
     _status_maps,
     load_aggregates,
     load_all_clients,
@@ -166,7 +167,10 @@ async def clients_recovery(
         live = stage_of(days)
         if not live or not already_bought(metrics):
             continue
-        item = _hydrate(base, metrics, status_by_id, by_cs.get(asg.cliente_id), apply_default=True)
+        cs = by_cs.get(asg.cliente_id)
+        if _pending_schedule(cs):
+            continue
+        item = _hydrate(base, metrics, status_by_id, cs, apply_default=True)
         item["nivel"] = live
         item["origem"] = "recuperacao"
         item["assigned_vendedor_id"] = asg.vendedor_id

@@ -13,6 +13,7 @@ export type Status = {
   color: string;
   order?: number;
   is_system?: boolean;
+  is_automatic?: boolean;
   is_default?: boolean;
   requires_motivo?: boolean;
 };

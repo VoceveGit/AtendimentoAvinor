@@ -7,6 +7,8 @@ import {
   LayoutDashboard,
   LogOut,
   MapPinned,
+  PanelLeftClose,
+  PanelLeftOpen,
   PieChart,
   Settings2,
   Shield,
@@ -59,7 +61,7 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   "/rotas": { title: "Rotas da Semana", subtitle: "Distribuição semanal de atendimento por rota (Enviar cards)" },
   "/config-status": {
     title: "Configurador de Status",
-    subtitle: "Status do atendimento e motivos prontos para a vendedora só escolher",
+    subtitle: "Cadastre e arraste a ordem. Status automáticos vêm das ações (agendar, finalizar)",
   },
   "/config-banco": {
     title: "Conexão de Banco de Dados",
@@ -78,7 +80,26 @@ export function AppShell() {
   const location = useLocation();
   const meta = TITLES[location.pathname] || { title: "Avinor", subtitle: "" };
   const isAdm = role === "adm";
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("avinor_sidebar") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [writeBackend, setWriteBackend] = useState<string | null>(null);
+
+  const toggleSidebar = () => {
+    setCollapsed((cur) => {
+      const next = !cur;
+      try {
+        localStorage.setItem("avinor_sidebar", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   useEffect(() => {
     if (!isAdm) return;
     api<{ write?: string; write_persistent?: boolean }>("/api/health")
@@ -94,43 +115,57 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-paper">
-      <aside className="flex w-[248px] shrink-0 flex-col bg-night text-slate-300">
-        <div className="flex items-center gap-3 px-5 py-5">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-avinor font-display text-lg font-extrabold text-white">
+      <aside className={cn("flex shrink-0 flex-col bg-night text-slate-300 transition-[width]", collapsed ? "w-[76px]" : "w-[248px]")}>
+        <div className={cn("flex items-center py-5", collapsed ? "justify-center px-2" : "gap-3 px-5")}>
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-avinor font-display text-lg font-extrabold text-white">
             A
           </div>
-          <div>
-            <p className="font-display text-base font-bold leading-none text-white">Avinor</p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Gestão de atendimento
-            </p>
-          </div>
+          {!collapsed && (
+            <div>
+              <p className="font-display text-base font-bold leading-none text-white">Avinor</p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Gestão de atendimento
+              </p>
+            </div>
+          )}
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3">
           {MAIN.map((item) => (
-            <Item key={item.to} {...item} />
+            <Item key={item.to} {...item} collapsed={collapsed} />
           ))}
           {isAdm && (
             <>
-              <p className="mb-1 mt-6 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Administração
-              </p>
+              {!collapsed && (
+                <p className="mb-1 mt-6 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Administração
+                </p>
+              )}
+              {collapsed && <div className="my-3 h-px bg-white/10" />}
               {ADMIN.map((item) => (
-                <Item key={item.to} {...item} />
+                <Item key={item.to} {...item} collapsed={collapsed} />
               ))}
             </>
           )}
         </nav>
         <button
           type="button"
+          onClick={toggleSidebar}
+          className="m-3 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
+          title={collapsed ? "Expandir menu" : "Encolher menu"}
+        >
+          {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          {!collapsed && "Encolher"}
+        </button>
+        <button
+          type="button"
           onClick={() => {
             logout();
             navigate("/");
           }}
-          className="m-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
+          className="m-3 mt-0 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
         >
           <LogOut className="h-4 w-4" />
-          Sair
+          {!collapsed && "Sair"}
         </button>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -189,19 +224,21 @@ export function AppShell() {
   );
 }
 
-function Item({ to, label, icon: Icon }: { to: string; label: string; icon: typeof Users }) {
+function Item({ to, label, icon: Icon, collapsed }: { to: string; label: string; icon: typeof Users; collapsed?: boolean }) {
   return (
     <NavLink
       to={to}
+      title={label}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+          "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition",
+          collapsed ? "justify-center" : "gap-2.5",
           isActive ? "bg-avinor text-white shadow-sm" : "text-slate-300 hover:bg-white/5 hover:text-white",
         )
       }
     >
-      <Icon className="h-4 w-4" />
-      {label}
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && label}
     </NavLink>
   );
 }

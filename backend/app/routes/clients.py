@@ -18,6 +18,9 @@ class StatusPatch(BaseModel):
     observacoes: str | None = None
     recontato: bool | None = None
     updated_by: str | None = None
+    origem: str | None = None
+    clear_agenda: bool = False
+    vendedor_id: int | None = None
 
 
 def _vendedor_q(raw: str | None, user: dict) -> int | None:
@@ -117,18 +120,32 @@ async def patch_status(
     if payload.status_id == "em_recuperacao":
         raise HTTPException(
             400,
-            "Status Em Recuperação é automático (última compra > 90 dias).",
+            "Status Em Recuperação é automático.",
         )
+    try:
+        if payload.clear_agenda:
+            return await svc.clear_schedule(session, cliente_id, user)
+        if payload.data_atendimento is not None:
+            return await svc.apply_schedule(
+                session,
+                cliente_id,
+                user,
+                payload.data_atendimento,
+                origem=payload.origem or "carteira",
+                vendedor_id=payload.vendedor_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     row = await session.get(ClientStatus, cliente_id)
     if row is None:
         row = ClientStatus(cliente_id=cliente_id)
         session.add(row)
     if payload.status_id is not None:
         row.status_id = payload.status_id or None
-    if payload.data_atendimento is not None:
-        row.data_atendimento = payload.data_atendimento
-        if payload.status_id != "atendido":
-            row.status_id = "visita_marcada"
+        if payload.status_id and payload.status_id != "agendado":
+            row.data_atendimento = None
+            row.agenda_origem = None
+            row.agenda_vendedor_id = None
     if payload.observacoes is not None:
         row.observacoes = payload.observacoes
     if payload.recontato is not None:
