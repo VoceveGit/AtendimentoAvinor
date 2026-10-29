@@ -2,7 +2,7 @@ name: Keep Render awake
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,7 +11,18 @@ jobs:
     steps:
       - name: Ping health
         run: |
-          curl -fsS --retry 2 --retry-delay 5 \
-            "${HEALTH_URL:-https://avinor-atendimento.onrender.com/api/health}"
+          URL="${HEALTH_URL:-https://atendimentoavinor.onrender.com/api/health}"
+          echo "Pinging $URL"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 45 "$URL"; then
+              echo
+              echo "ok (attempt $i)"
+              exit 0
+            fi
+            echo "attempt $i failed, retry in 10s"
+            sleep 10
+          done
+          echo "failed after retries"
+          exit 1
         env:
           HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
